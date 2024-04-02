@@ -42,7 +42,6 @@ export class UsersController {
     @Param('id') id: string,
     @UploadedFile(ThumbnailPipe) image: string,
   ) {
-    console.log(id, image);
     return this.usersService.uploadImage(+id, image);
   }
 

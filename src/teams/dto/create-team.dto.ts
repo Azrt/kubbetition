@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { CreateUserDto } from 'src/users/dto/create-user.dto';
 
 export class CreateTeamDto {
   @ApiProperty({ readOnly: true })
@@ -13,7 +12,4 @@ export class CreateTeamDto {
 
   @ApiProperty()
   isActive: boolean;
-
-  @ApiProperty({ isArray: true })
-  members: Array<CreateUserDto>;
 }

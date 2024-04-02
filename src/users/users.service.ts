@@ -3,7 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 @Injectable()
 export class UsersService {
@@ -26,6 +26,18 @@ export class UsersService {
 
   findOneByEmail(email: string) {
     return this.usersRepository.findOneBy({ email });
+  }
+
+  findByIds(ids: Array<number>, team?: number) {
+    return this.usersRepository.find({
+      relations: ['team'],
+      where: {
+        id: In(ids),
+        ...(team && {
+          team: { id: team },
+        }),        
+      },
+    });
   }
 
   uploadImage(id: number, image: string) {

@@ -1,17 +1,13 @@
+import { Common } from 'src/common/entities/CommonEntity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Column,
   Entity,
-  // JoinTable,
   OneToMany,
-  PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity()
-export class Team {
-  @PrimaryGeneratedColumn()
-  id: number;
-
+export class Team extends Common {
   @Column({ length: 160 })
   name: string;
 

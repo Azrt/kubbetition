@@ -9,13 +9,14 @@ import { DataSource } from 'typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 
+import * as Joi from '@hapi/joi';
 import { MulterModule } from '@nestjs/platform-express';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 // import { memoryStorage } from 'multer';
 import { TeamsModule } from './teams/teams.module';
 import { DatabaseModule } from './database.module';
-import * as Joi from '@hapi/joi';
+import { TeamSectionsModule } from './teamSections/teamSections.module';
 
 const configValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
@@ -34,24 +35,25 @@ const configValidationSchema = Joi.object({
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
+      rootPath: join(__dirname, "..", "uploads"),
     }),
     MulterModule.register({
-      dest: './uploads',
+      dest: "./uploads",
       preservePath: true,
     }),
     ConfigModule.forRoot({
-      envFilePath: ['.local.env', '.env'],
+      envFilePath: [".local.env", ".env"],
       isGlobal: true,
       validationSchema: configValidationSchema,
     }),
     DevtoolsModule.register({
-      http: process.env.NODE_ENV !== 'production',
+      http: process.env.NODE_ENV !== "production",
     }),
     DatabaseModule,
     AuthModule,
     UsersModule,
     TeamsModule,
+    TeamSectionsModule,
   ],
   controllers: [AppController],
   providers: [AppService, GoogleStrategy],

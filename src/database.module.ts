@@ -8,25 +8,18 @@ import { User } from './users/entities/user.entity';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        console.log(
-          configService.get('POSTGRES_HOST'),
-          'service',
-          configService.get('GOOGLE_CLIENT_ID'),
-        );
-        return {
-          type: 'postgres',
-          host: configService.get('POSTGRES_HOST'),
-          port: configService.get('POSTGRES_PORT'),
-          username: configService.get('POSTGRES_USER'),
-          password: configService.get('POSTGRES_PASSWORD'),
-          database: configService.get('POSTGRES_DB'),
-          entities: [User],
-          synchronize: true,
-          logging: true,
-          autoLoadEntities: true,
-        };
-      },
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get('POSTGRES_HOST'),
+        port: configService.get('POSTGRES_PORT'),
+        username: configService.get('POSTGRES_USER'),
+        password: configService.get('POSTGRES_PASSWORD'),
+        database: configService.get('POSTGRES_DB'),
+        entities: [User],
+        synchronize: true,
+        logging: true,
+        autoLoadEntities: true,
+      }),
     }),
   ],
 })

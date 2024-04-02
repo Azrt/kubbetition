@@ -51,8 +51,6 @@ export class AuthController {
         token: jwtToken,
       };
 
-      console.log({ data });
-
       res.status(HttpStatus.OK).json(data);
     } catch {
       res.status(HttpStatus.BAD_REQUEST);
