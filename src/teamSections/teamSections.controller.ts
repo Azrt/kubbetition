@@ -13,6 +13,9 @@ import { CreateTeamSectionDto } from "./dto/create-team-section.dto";
 import { JwtAuthGuard } from "src/auth/guards/jwt.guard";
 import { ApiBearerAuth } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
+import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from "nestjs-paginate";
+import { TeamSection } from "./entities/teamSection.entity";
+import { TEAM_SECTIONS_PAGINATION_CONFIG } from "./teamSections.constants";
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("team-sections")
@@ -27,8 +30,9 @@ export class TeamSectionsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.teamSectionsService.findAll();
+  @PaginatedSwaggerDocs(CreateTeamSectionDto, TEAM_SECTIONS_PAGINATION_CONFIG)
+  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<TeamSection>> {
+    return this.teamSectionsService.findAll(query);
   }
 
   @Get("/:teamId")

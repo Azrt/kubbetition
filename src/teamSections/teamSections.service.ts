@@ -1,11 +1,13 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { TeamSection } from "./entities/teamSection.entity";
 import { CreateTeamSectionDto } from "./dto/create-team-section.dto";
 import { GameType } from "src/common/enums/gameType";
 import { UsersService } from "src/users/users.service";
 import { TeamsService } from "src/teams/teams.service";
+import { PaginateQuery, paginate } from "nestjs-paginate";
+import { TEAM_SECTIONS_PAGINATION_CONFIG } from "./teamSections.constants";
 
 @Injectable()
 export class TeamSectionsService {
@@ -20,7 +22,7 @@ export class TeamSectionsService {
     const members = await this.usersService.findByIds(
       createTeamSectionDto.members
     );
-    const team = await this.teamsService.findOne(createTeamSectionDto.team)
+    const team = await this.teamsService.findOne(createTeamSectionDto.team);
 
     const updatedCreateTeamSectionDto = {
       ...createTeamSectionDto,
@@ -31,8 +33,8 @@ export class TeamSectionsService {
     return this.teamSectionsRepository.save(updatedCreateTeamSectionDto);
   }
 
-  findAll() {
-    return this.teamSectionsRepository.find({ relations: ["team", "members"] });
+  findAll(query?: PaginateQuery) {
+    return paginate(query, this.teamSectionsRepository, TEAM_SECTIONS_PAGINATION_CONFIG);
   }
 
   findOne(id: number) {

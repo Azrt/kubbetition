@@ -14,9 +14,12 @@ import { UpdateTeamDto } from './dto/update-team.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
+import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
+import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
+import { Team } from './entities/team.entity';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
-@Controller('teams')
+@Controller("teams")
 export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
@@ -28,25 +31,26 @@ export class TeamsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.teamsService.findAll();
+  @PaginatedSwaggerDocs(CreateTeamDto, TEAMS_PAGINATION_CONFIG)
+  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Team>> {
+    return this.teamsService.findAll(query);
   }
 
-  @Get(':id')
+  @Get(":id")
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string) {
+  findOne(@Param("id") id: string) {
     return this.teamsService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   @UseGuards(JwtAuthGuard)
-  update(@Param('id') id: string, @Body() updateTeamDto: UpdateTeamDto) {
+  update(@Param("id") id: string, @Body() updateTeamDto: UpdateTeamDto) {
     return this.teamsService.update(+id, updateTeamDto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  remove(@Param('id') id: string) {
+  remove(@Param("id") id: string) {
     return this.teamsService.remove(+id);
   }
 }
