@@ -5,6 +5,7 @@ import { TeamExistsRule } from "../../common/validators/team-exists.rule";
 import { TeamMembersExistsRule } from "../validation/team-members-exists.rule";
 import { TeamMembersNumberRule } from "../validation/team-members-number.rule";
 import { UniqueMembersRule } from "../validation/unique-members.rule";
+import { Team } from "src/teams/entities/team.entity";
 
 export class CreateTeamSectionDto {
   @ApiProperty({ readOnly: true })
@@ -14,7 +15,7 @@ export class CreateTeamSectionDto {
   @IsInt()
   @IsDefined()
   @Validate(TeamExistsRule)
-  team: number;
+  team: Team;
 
   @ApiProperty()
   @IsEnum(GameType)
@@ -24,8 +25,8 @@ export class CreateTeamSectionDto {
   @IsArray()
   @IsInt({ each: true })
   @IsDefined()
-  @Validate(TeamMembersExistsRule)
   @Validate(TeamMembersNumberRule)
+  @Validate(TeamMembersExistsRule)
   @Validate(UniqueMembersRule)
   members: Array<number>;
 }

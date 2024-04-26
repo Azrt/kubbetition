@@ -19,7 +19,7 @@ import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
-@Controller('users')
+@Controller("users")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -29,29 +29,31 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Get(':id')
+  @Get(":id")
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string) {
+  findOne(@Param("id") id: string) {
     return this.usersService.findOne(+id);
   }
 
-  @Post(':id/image')
+  @Post(":id/image")
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FileInterceptor("image"))
   uploadImage(
-    @Param('id') id: string,
-    @UploadedFile(ThumbnailPipe) image: string,
+    @Param("id") id: string,
+    @UploadedFile(ThumbnailPipe) image: string
   ) {
     return this.usersService.uploadImage(+id, image);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @Patch(":id")
+  @UseGuards(JwtAuthGuard)
+  update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(+id, updateUserDto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
+  @Delete(":id")
+  @UseGuards(JwtAuthGuard)
+  remove(@Param("id") id: string) {
     return this.usersService.remove(+id);
   }
 }

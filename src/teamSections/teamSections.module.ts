@@ -11,9 +11,10 @@ import { TeamExistsRule } from "../common/validators/team-exists.rule";
 import { TeamMembersExistsRule } from "./validation/team-members-exists.rule";
 import { TeamMembersNumberRule } from "./validation/team-members-number.rule";
 import { UniqueMembersRule } from "./validation/unique-members.rule";
+import { TeamSectionMembers } from "./entities/teamSectionMembers.entity";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TeamSection, User, Team])],
+  imports: [TypeOrmModule.forFeature([TeamSection, User, Team, TeamSectionMembers])],
   controllers: [TeamSectionsController],
   providers: [
     TeamSectionsService,

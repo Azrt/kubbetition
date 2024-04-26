@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
-import { UpdateTeamDto } from './dto/update-team.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Team } from './entities/team.entity';
 import { Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
+import { UpdateTeamDto } from './dto/update-team.dto';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class TeamsService {
@@ -14,8 +15,17 @@ export class TeamsService {
     private teamsRepository: Repository<Team>
   ) {}
 
-  create(createTeamDto: CreateTeamDto) {
-    return this.teamsRepository.save(createTeamDto);
+  async create(createTeamDto: CreateTeamDto) {
+    const { members = [], ...data } = createTeamDto;
+    const teamSection = this.teamsRepository.create(data as unknown as Team);
+
+    if (members) {
+      teamSection.members = members.map(
+        (id) => ({ id }) as User
+      );
+    }
+
+    return this.teamsRepository.save(teamSection);
   }
 
   findAll(query?: PaginateQuery) {
@@ -23,11 +33,18 @@ export class TeamsService {
   }
 
   findOne(id: number) {
-    return this.teamsRepository.findOneBy({ id });
+    return this.teamsRepository.findOne({ relations: ["members"], where: { id } });
   }
 
-  update(id: number, updateTeamDto: UpdateTeamDto) {
-    return this.teamsRepository.update({ id }, updateTeamDto);
+  async update(id: number, updateTeamDto: UpdateTeamDto) {
+    const teamSection = this.teamsRepository.create(updateTeamDto as unknown as Team);
+    teamSection.id = id;
+
+    if (updateTeamDto.members) {
+      teamSection.members = updateTeamDto.members.map((id) => ({ id }) as User);
+    }
+
+    return this.teamsRepository.save(teamSection);
   }
 
   remove(id: number) {

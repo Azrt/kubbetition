@@ -14,7 +14,7 @@ export class User {
   public id: number;
 
   @Column({ length: 250, unique: true })
-  @Index('user_email_idx')
+  @Index("user_email_idx")
   public email: string;
 
   @Column({ length: 160 })

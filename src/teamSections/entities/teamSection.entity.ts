@@ -32,6 +32,16 @@ export class TeamSection {
   @ManyToMany(() => User, {
     cascade: true,
   })
-  @JoinTable()
+  @JoinTable({
+    name: "team_section_members",
+    joinColumn: {
+      name: "team_section_id",
+      referencedColumnName: "id",
+    },
+    inverseJoinColumn: {
+      name: "member_id",
+      referencedColumnName: "id",
+    },
+  })
   members: Array<User>;
 }

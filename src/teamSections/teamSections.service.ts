@@ -1,40 +1,40 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { TeamSection } from "./entities/teamSection.entity";
 import { CreateTeamSectionDto } from "./dto/create-team-section.dto";
 import { GameType } from "src/common/enums/gameType";
-import { UsersService } from "src/users/users.service";
-import { TeamsService } from "src/teams/teams.service";
 import { PaginateQuery, paginate } from "nestjs-paginate";
 import { TEAM_SECTIONS_PAGINATION_CONFIG } from "./teamSections.constants";
+import { UpdateTeamSectionDto } from "./dto/update-team-section.dto";
+import { User } from "src/users/entities/user.entity";
+import { TeamSectionMembers } from "./entities/teamSectionMembers.entity";
 
 @Injectable()
 export class TeamSectionsService {
   constructor(
     @InjectRepository(TeamSection)
     private teamSectionsRepository: Repository<TeamSection>,
-    private usersService: UsersService,
-    private teamsService: TeamsService
+    @InjectRepository(TeamSectionMembers)
+    private teamSectionMembersRepository: Repository<TeamSectionMembers>,
+    private dataSource: DataSource
   ) {}
 
   async create(createTeamSectionDto: CreateTeamSectionDto) {
-    const members = await this.usersService.findByIds(
-      createTeamSectionDto.members
-    );
-    const team = await this.teamsService.findOne(createTeamSectionDto.team);
+    const { members, ...data } = createTeamSectionDto
 
-    const updatedCreateTeamSectionDto = {
-      ...createTeamSectionDto,
-      members,
-      team,
-    };
+    const teamSection = this.teamSectionsRepository.create(data)
+    teamSection.members = members.map((id) => ({ id } as User))
 
-    return this.teamSectionsRepository.save(updatedCreateTeamSectionDto);
+    return this.teamSectionsRepository.save(teamSection);
   }
 
   findAll(query?: PaginateQuery) {
-    return paginate(query, this.teamSectionsRepository, TEAM_SECTIONS_PAGINATION_CONFIG);
+    return paginate(
+      query,
+      this.teamSectionsRepository,
+      TEAM_SECTIONS_PAGINATION_CONFIG
+    );
   }
 
   findOne(id: number) {
@@ -49,11 +49,38 @@ export class TeamSectionsService {
     return this.teamSectionsRepository.findBy({ type });
   }
 
-  findByMembers(members: Array<number>) {
-    return this.teamSectionsRepository
-      .createQueryBuilder("section")
-      .leftJoin("section.members", "member")
-      .where("member.id IN (:...members)", { members })
-      .getOne();
+  findByMembers(members: Array<number> = [], type?: GameType) {
+    const ids = members.sort((a, b) => b - a)
+
+    const initialQuery = this.dataSource.manager
+      .getRepository(TeamSectionMembers)
+      .createQueryBuilder("tsm")
+      .select("tsm.team_section_id", "team_section_id")
+      .addSelect("ts.type", "type")
+      .leftJoin("team_section", "ts", "tsm.team_section_id = ts.id")
+      .where("tsm.member_id IN (:...ids)", { ids });
+
+    if (type) {
+      initialQuery.andWhere("ts.type = :type", { type })
+    }
+
+    return initialQuery
+      .groupBy("team_section_id, type")
+      .having(`COUNT(team_section_id) = ${ids.length}`)
+      .getRawMany();
+  }
+
+  async update(id: number, updateTeamSectionDto: UpdateTeamSectionDto) {
+    const { members = [], ...data} = updateTeamSectionDto;
+
+    const teamSection = this.teamSectionsRepository.create(data);
+    teamSection.id = id;
+    teamSection.members = members.map((id) => ({ id }) as User);
+
+    return this.teamSectionsRepository.save(teamSection);
+  }
+
+  remove(id: number) {
+    return this.teamSectionsRepository.delete({ id });
   }
 }

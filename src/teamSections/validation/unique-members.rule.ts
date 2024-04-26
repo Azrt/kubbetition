@@ -12,7 +12,7 @@ export class UniqueMembersRule implements ValidatorConstraintInterface {
   constructor(private teamSectionsService: TeamSectionsService) {}
 
   async validate(ids: Array<number>, validationArguments: ValidationArguments) {
-    const sections = await this.teamSectionsService.findByMembers(ids);
+    const sections = await this.teamSectionsService.findByMembers(ids, ids.length);
 
     return !sections;
   }

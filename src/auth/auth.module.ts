@@ -7,6 +7,8 @@ import { UsersService } from 'src/users/users.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
+import { TeamsService } from 'src/teams/teams.service';
+import { Team } from 'src/teams/entities/team.entity';
 
 @Module({
   imports: [
@@ -22,9 +24,9 @@ import { JwtModule } from '@nestjs/jwt';
         },
       }),
     }),
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Team]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, UsersService],
+  providers: [AuthService, UsersService, TeamsService],
 })
 export class AuthModule {}

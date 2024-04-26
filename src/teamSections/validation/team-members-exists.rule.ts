@@ -15,7 +15,7 @@ export class TeamMembersExistsRule implements ValidatorConstraintInterface {
   async validate(ids: Array<number>, validationArguments: ValidationArguments) {
     // TODO: Change "object" type when generics are available
     const teamId = (validationArguments.object as CreateTeamSectionDto)
-      .team as number;
+      .team as unknown as number;
 
     const members = await this.usersService.findByIds(ids, teamId);
 
