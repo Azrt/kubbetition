@@ -17,6 +17,7 @@ import { ThumbnailPipe } from 'src/common/pipes/thumbnail.pipe';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
@@ -31,6 +32,7 @@ export class UsersController {
 
   @Get(":id")
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("id") id: string) {
     return this.usersService.findOne(+id);
   }

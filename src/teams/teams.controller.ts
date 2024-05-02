@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
@@ -17,6 +18,7 @@ import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
 import { Team } from './entities/team.entity';
+import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("teams")
@@ -38,6 +40,7 @@ export class TeamsController {
 
   @Get(":id")
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("id") id: string) {
     return this.teamsService.findOne(+id);
   }

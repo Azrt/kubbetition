@@ -17,6 +17,8 @@ import { join } from 'path';
 import { TeamsModule } from './teams/teams.module';
 import { DatabaseModule } from './database.module';
 import { TeamSectionsModule } from './teamSections/teamSections.module';
+import { GamesModule } from './games/games.module';
+import { ScoresModule } from './scores/scores.module';
 
 const configValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
@@ -54,6 +56,8 @@ const configValidationSchema = Joi.object({
     UsersModule,
     TeamsModule,
     TeamSectionsModule,
+    ScoresModule,
+    GamesModule,
   ],
   controllers: [AppController],
   providers: [AppService, GoogleStrategy],

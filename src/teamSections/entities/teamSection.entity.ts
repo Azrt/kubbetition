@@ -1,4 +1,6 @@
 import { GameType } from "src/common/enums/gameType";
+import { Game } from "src/games/entities/game.entity";
+import { Score } from "src/scores/entities/score.entity";
 import { Team } from "src/teams/entities/team.entity";
 import { User } from "src/users/entities/user.entity";
 import {
@@ -9,6 +11,7 @@ import {
   ManyToOne,
   ManyToMany,
   JoinTable,
+  OneToMany,
 } from "typeorm";
 
 @Entity()
@@ -44,4 +47,16 @@ export class TeamSection {
     },
   })
   members: Array<User>;
+
+  @OneToMany(() => Score, (score) => score.teamSection, {
+    cascade: true,
+    nullable: true,
+  })
+  scores: Array<Score>;
+
+  @OneToMany(() => Game, (game) => game.winner, {
+    cascade: true,
+    nullable: true,
+  })
+  wins: Array<Game>;
 }
