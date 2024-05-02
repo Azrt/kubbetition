@@ -9,6 +9,8 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './guards/jwt.guard';
 
 @Module({
   imports: [
@@ -27,6 +29,9 @@ import { Team } from 'src/teams/entities/team.entity';
     TypeOrmModule.forFeature([User, Team]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, UsersService, TeamsService],
+  providers: [AuthService, UsersService, TeamsService, {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+  }],
 })
 export class AuthModule {}

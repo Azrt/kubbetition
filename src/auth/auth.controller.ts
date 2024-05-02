@@ -12,17 +12,20 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleOauthGuard } from './guards/google-oauth.guard';
 import { GoogleLoginDto } from './dto/login.dto';
+import { Public } from 'src/common/decorators/public.decorator';
 
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Get('google')
+  @Public()
+  @Get("google")
   @UseGuards(GoogleOauthGuard)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async googleAuth(@Req() _req) {}
 
-  @Get('google/redirect')
+  @Public()
+  @Get("google/redirect")
   @UseGuards(GoogleOauthGuard)
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
     try {
@@ -30,14 +33,15 @@ export class AuthController {
         accessToken: req.user.accessToken,
       });
     } catch (e) {
-      res.redirect('/login');
+      res.redirect("/login");
     }
   }
 
-  @Post('google/login')
+  @Public()
+  @Post("google/login")
   async googleTokenLogin(
     @Body() params: GoogleLoginDto,
-    @Res() res: Response,
+    @Res() res: Response
   ): Promise<any> {
     try {
       const user = await this.authService.googleTokenLogin(params.token);

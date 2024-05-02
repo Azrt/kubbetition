@@ -6,13 +6,11 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
   Query,
   UseInterceptors,
 } from "@nestjs/common";
 import { TeamSectionsService } from "./teamSections.service";
 import { CreateTeamSectionDto } from "./dto/create-team-section.dto";
-import { JwtAuthGuard } from "src/auth/guards/jwt.guard";
 import { ApiBearerAuth } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from "nestjs-paginate";
@@ -29,20 +27,17 @@ export class TeamSectionsController {
   constructor(private readonly teamSectionsService: TeamSectionsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   create(@Body() createTeamSectionDto: CreateTeamSectionDto) {
     return this.teamSectionsService.create(createTeamSectionDto);
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
   @PaginatedSwaggerDocs(CreateTeamSectionDto, TEAM_SECTIONS_PAGINATION_CONFIG)
   findAll(@Paginate() query: PaginateQuery): Promise<Paginated<TeamSection>> {
     return this.teamSectionsService.findAll(query);
   }
 
   @Get("members")
-  @UseGuards(JwtAuthGuard)
   findByMembers(
     @Query("ids") ids: string,
     @Query("type", GameTypePipe) type?: GameType
@@ -55,14 +50,12 @@ export class TeamSectionsController {
   }
 
   @Get(":id")
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("id") id: number) {
     return this.teamSectionsService.findOne(+id);
   }
 
   @Patch(":id")
-  @UseGuards(JwtAuthGuard)
   update(
     @Param("id") id: string,
     @Body() updateTeamSectionDto: UpdateTeamSectionDto
@@ -71,7 +64,6 @@ export class TeamSectionsController {
   }
 
   @Delete(":id")
-  @UseGuards(JwtAuthGuard)
   remove(@Param("id") id: string) {
     return this.teamSectionsService.remove(+id);
   }

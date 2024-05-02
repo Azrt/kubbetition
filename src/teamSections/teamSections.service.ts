@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, Repository } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 import { TeamSection } from "./entities/teamSection.entity";
 import { CreateTeamSectionDto } from "./dto/create-team-section.dto";
 import { GameType } from "src/common/enums/gameType";
