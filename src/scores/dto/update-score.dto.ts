@@ -1,8 +1,7 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { CreateScoreDto } from './create-score.dto';
-import { IsInt, Max, Min } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, Max, Min, Validate } from 'class-validator';
 
-export class UpdateScoreDto extends PartialType(CreateScoreDto) {
+export class UpdateScoreDto {
   @ApiProperty()
   @IsInt()
   @Min(0)

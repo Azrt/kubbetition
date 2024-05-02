@@ -1,8 +1,9 @@
-import { Controller, Get, Body, Patch, Param, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Body, Patch, Param, UseInterceptors, ValidationPipe } from '@nestjs/common';
 import { ScoresService } from './scores.service';
 import { UpdateScoreDto } from './dto/update-score.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
 import { ScoreUpdateInterceptor } from './interceptors/score-update-interceptor';
+import { GameInProgressPipe } from './pipes/game-in-progress.pipe';
 
 @Controller("scores")
 export class ScoresController {
@@ -27,7 +28,10 @@ export class ScoresController {
 
   @Patch(":id")
   @UseInterceptors(ScoreUpdateInterceptor)
-  update(@Param("id") id: string, @Body() updateScoreDto: UpdateScoreDto) {
+  update(
+    @Param("id", GameInProgressPipe) id: string,
+    @Body() updateScoreDto: UpdateScoreDto
+  ) {
     return this.scoresService.update(+id, updateScoreDto);
   }
 }
