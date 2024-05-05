@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 export type JwtPayload = {
   sub: string;
   email: string;
+  isEmailConfirmed: string;
 };
 
 @Injectable()
@@ -41,7 +42,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     return {
       id: payload.sub,
-      email: payload.email,
+      ...user,
     };
   }
 }

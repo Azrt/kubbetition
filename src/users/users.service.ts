@@ -19,7 +19,7 @@ export class UsersService {
   }
 
   findAll() {
-    return this.usersRepository.find({ relations: ['team'] });
+    return this.usersRepository.find({ relations: ["team"] });
   }
 
   findOne(id: number) {
@@ -32,12 +32,12 @@ export class UsersService {
 
   findByIds(ids: Array<number>, team?: number) {
     return this.usersRepository.find({
-      relations: ['team'],
+      relations: ["team"],
       where: {
         id: In(ids),
         ...(team && {
           team: { id: team },
-        }),        
+        }),
       },
     });
   }
@@ -54,6 +54,15 @@ export class UsersService {
       ...updateUserDto,
       team,
     });
+  }
+
+  async confirmEmail(email: string) {
+    return this.usersRepository.update(
+      { email },
+      {
+        isEmailConfirmed: true,
+      }
+    );
   }
 
   remove(id: number) {

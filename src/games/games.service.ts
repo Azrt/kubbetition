@@ -54,19 +54,12 @@ export class GamesService {
         game,
       });
 
-      const firstTeamScore = await queryRunner.manager.save(firstTeamScoreData);
-      const secondTeamScore = await queryRunner.manager.save(secondTeamScoreData);
-
-      const updatedGameData = this.gamesRepository.create({
-        ...game,
-        scores: [firstTeamScore, secondTeamScore],
-      });
-  
-      const updatedGame = await queryRunner.manager.save(updatedGameData);
+      await queryRunner.manager.save(firstTeamScoreData);
+      await queryRunner.manager.save(secondTeamScoreData);
 
       await queryRunner.commitTransaction();
 
-      return updatedGame;
+      return game;
     } catch (e) {
       await queryRunner.rollbackTransaction();
 

@@ -6,11 +6,25 @@ import { User } from 'src/users/entities/user.entity';
 import { UsersService } from 'src/users/users.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './guards/jwt.guard';
+import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
+import EmailService from 'src/email/email.service';
+import { EmailConfirmationGuard } from './guards/email-confirmation.guard';
+
+const globalGuards = [
+  {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+  },
+  {
+    provide: APP_GUARD,
+    useClass: EmailConfirmationGuard,
+  }
+];
 
 @Module({
   imports: [
@@ -20,18 +34,23 @@ import { JwtAuthGuard } from './guards/jwt.guard';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET'),
+        secret: configService.get("JWT_SECRET"),
         signOptions: {
-          expiresIn: `${configService.get('JWT_EXPIRATION_TIME')}s`,
+          expiresIn: `${configService.get("JWT_EXPIRATION_TIME")}s`,
         },
       }),
     }),
     TypeOrmModule.forFeature([User, Team]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, UsersService, TeamsService, {
-    provide: APP_GUARD,
-    useClass: JwtAuthGuard,
-  }],
+  providers: [
+    AuthService,
+    UsersService,
+    TeamsService,
+    JwtService,
+    EmailService,
+    EmailConfirmationService,
+    ...globalGuards,
+  ],
 })
 export class AuthModule {}

@@ -48,6 +48,7 @@ export class AuthController {
       const jwtToken = await this.authService.generateJwt({
         sub: user.id,
         email: user.email,
+        isEmailConfirmed: user.isEmailConfirmed,
       });
 
       const data = {
@@ -56,8 +57,8 @@ export class AuthController {
       };
 
       res.status(HttpStatus.OK).json(data);
-    } catch {
-      res.status(HttpStatus.BAD_REQUEST);
+    } catch (e) {
+      res.status(HttpStatus.BAD_REQUEST).json(e);
     }
   }
 }

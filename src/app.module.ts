@@ -19,6 +19,7 @@ import { DatabaseModule } from './database.module';
 import { TeamSectionsModule } from './teamSections/teamSections.module';
 import { GamesModule } from './games/games.module';
 import { ScoresModule } from './scores/scores.module';
+import { EmailModule } from './email/email.module';
 
 const configValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
@@ -32,6 +33,13 @@ const configValidationSchema = Joi.object({
   // PORT: Joi.number(),
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRATION_TIME: Joi.number().required(),
+  JWT_EMAIL_EXPIRATION_TIME: Joi.number().required(),
+  EMAIL_SERVICE: Joi.string().required(),
+  EMAIL_USER: Joi.string().required(),
+  EMAIL_PASSWORD: Joi.string().required(),
+  EMAIL_CONFIRMATION_URL: Joi.string().required(),
+  EMAIL_PORT: Joi.string().required(),
+  EMAIL_HOST: Joi.string().required(),
 });
 
 @Module({
@@ -53,6 +61,7 @@ const configValidationSchema = Joi.object({
     }),
     DatabaseModule,
     AuthModule,
+    EmailModule,
     UsersModule,
     TeamsModule,
     TeamSectionsModule,

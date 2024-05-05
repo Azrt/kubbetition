@@ -26,6 +26,9 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ default: false })
+  isEmailConfirmed: boolean;
+
   @Column({ nullable: true, length: 450 })
   image: string;
 

@@ -1,53 +1,40 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UsersService } from 'src/users/users.service';
-import { google, Auth } from 'googleapis';
+import { Auth, google } from 'googleapis';
+import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
+import { parseGoogleUserData } from './auth.helpers';
 
 @Injectable()
 export class AuthService {
-  private oauthClient: Auth.OAuth2Client;
+  private clientId;
+  private clientSecret;
 
   constructor(
-    private jwtService: JwtService,
-    private usersService: UsersService,
-    private configService: ConfigService,
+    private readonly jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService,
+    private readonly emailConfirmationService: EmailConfirmationService
   ) {
-    const clientID = this.configService.get('GOOGLE_CLIENT_ID');
-    const clientSecret = this.configService.get('GOOGLE_SECRET');
-
-    this.oauthClient = new google.auth.OAuth2(clientID, clientSecret);
+    this.clientId = this.configService.get("GOOGLE_CLIENT_ID");
+    this.clientSecret = this.configService.get("GOOGLE_SECRET");
   }
 
   generateJwt(payload) {
-    return this.jwtService.sign(payload);
-  }
-
-  async signIn(user) {
-    if (!user) {
-      throw new BadRequestException('Unauthenticated');
-    }
-
-    const userExists = await this.findUserByEmail(user.email);
-
-    if (!userExists) {
-      return this.registerUser(user);
-    }
-
-    return this.generateJwt({
-      sub: userExists.id,
-      email: userExists.email,
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get("JWT_SECRET"),
+      expiresIn: `${this.configService.get("JWT_EMAIL_EXPIRATION_TIME")}s`,
     });
   }
 
   async googleLogin(req) {
     if (!req.user) {
-      throw new BadRequestException('No user from google');
+      throw new BadRequestException("No user from google");
     }
 
     const user = {
@@ -58,25 +45,56 @@ export class AuthService {
     return user;
   }
 
+  async getGoogleUser(access_token: string) {
+    const oauth2Client = new google.auth.OAuth2({
+      clientId: this.clientId,
+      clientSecret: this.clientSecret,
+      credentials: {
+        access_token,
+      },
+    });
+
+    const oauth2 = google.oauth2({
+      auth: oauth2Client,
+      version: "v2",
+    });
+
+    const { data } = await oauth2.userinfo.get();
+
+    return parseGoogleUserData(data);
+  }
+
   async googleTokenLogin(idToken: string) {
-    const tokenInfo = await this.oauthClient.getTokenInfo(idToken);
+    try {
+      const user = await this.getGoogleUser(idToken);
 
-    const userExists = await this.findUserByEmail(tokenInfo.email);
+      const existingUser = await this.findUserByEmail(user.email);
 
-    if (!userExists) {
-      return this.registerUser(userExists);
+      if (!existingUser) {
+        return this.registerUser(user);
+      }
+
+      if (!existingUser.isEmailConfirmed) {
+        throw new BadRequestException(
+          `${existingUser.email} user is not active`
+        );
+      }
+
+      return existingUser;
+    } catch (e) {
+      throw new BadRequestException(e?.message ?? "Invalid user token");
     }
-
-    return userExists;
   }
 
   async registerUser(user: CreateUserDto) {
     try {
       const newUser = await this.usersService.create(user);
 
+      await this.emailConfirmationService.sendVerificationLink(newUser.email);
+
       return newUser;
     } catch {
-      throw new InternalServerErrorException();
+      throw new BadRequestException();
     }
   }
 
