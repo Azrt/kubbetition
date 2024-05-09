@@ -9,9 +9,10 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { User } from "src/users/entities/user.entity";
 import { TeamsService } from "src/teams/teams.service";
 import { Team } from "src/teams/entities/team.entity";
+import { TeamSection } from "src/teamSections/entities/teamSection.entity";
 
 @Module({
-  imports: [ConfigModule, TypeOrmModule.forFeature([User, Team])],
+  imports: [ConfigModule, TypeOrmModule.forFeature([User, Team, TeamSection])],
   controllers: [EmailConfirmationController],
   providers: [
     EmailService,
@@ -20,6 +21,7 @@ import { Team } from "src/teams/entities/team.entity";
     UsersService,
     ConfigService,
     TeamsService,
+    TeamSection,
   ],
 })
 export class EmailModule {}

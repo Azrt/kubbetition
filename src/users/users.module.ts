@@ -7,9 +7,10 @@ import { JwtStrategy } from 'src/jwt.strategy';
 import { ConfigService } from '@nestjs/config';
 import { Team } from 'src/teams/entities/team.entity';
 import { TeamsService } from 'src/teams/teams.service';
+import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Team])],
+  imports: [TypeOrmModule.forFeature([User, Team, TeamSection])],
   controllers: [UsersController],
   providers: [UsersService, ConfigService, JwtStrategy, TeamsService],
 })

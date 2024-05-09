@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsInt, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class CreateTeamDto {
   @ApiProperty({ readOnly: true })
@@ -10,9 +10,11 @@ export class CreateTeamDto {
   name: string;
 
   @ApiProperty()
+  @IsOptional()
   image: string;
 
   @ApiProperty()
   @IsBoolean()
+  @IsOptional()
   isActive: boolean;
 }

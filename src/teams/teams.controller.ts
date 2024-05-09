@@ -7,7 +7,7 @@ import {
   Param,
   Delete,
   UseInterceptors,
-  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
@@ -20,6 +20,10 @@ import { Team } from './entities/team.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
+import { SameTeamGuard } from 'src/common/guards/same-team.guard';
+import { IncludeAdminRoles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/role.enum';
+import { EmptyTeamGuard } from 'src/common/guards/empty-team.guard';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("teams")
@@ -27,6 +31,7 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Post()
+  @UseGuards(EmptyTeamGuard)
   create(@Body() createTeamDto: CreateTeamDto, @CurrentUser() user: User) {
     return this.teamsService.create(createTeamDto, user);
   }
@@ -37,19 +42,26 @@ export class TeamsController {
     return this.teamsService.findAll(query);
   }
 
-  @Get(":id")
+  @Get(":teamId")
   @UseInterceptors(NotFoundInterceptor)
-  findOne(@Param("id") id: string) {
-    return this.teamsService.findOne(+id);
+  findOne(@Param("teamId") teamId: string) {
+    return this.teamsService.findOne(+teamId);
   }
 
-  @Patch(":id")
-  update(@Param("id") id: string, @Body() updateTeamDto: UpdateTeamDto) {
-    return this.teamsService.update(+id, updateTeamDto);
+  @Patch(":teamId")
+  @UseGuards(SameTeamGuard)
+  @UseInterceptors(NotFoundInterceptor)
+  update(
+    @Param("teamId") teamId: string,
+    @Body() updateTeamDto: UpdateTeamDto
+  ) {
+    return this.teamsService.update(+teamId, updateTeamDto);
   }
 
-  @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.teamsService.remove(+id);
+  @Delete(":teamId")
+  @UseGuards(SameTeamGuard)
+  @IncludeAdminRoles(Role.SUPERVISOR)
+  remove(@Param("teamId") teamId: string) {
+    return this.teamsService.remove(+teamId);
   }
 }

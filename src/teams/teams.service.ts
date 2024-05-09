@@ -2,27 +2,69 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Team } from './entities/team.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { User } from 'src/users/entities/user.entity';
+import { Role } from 'src/common/enums/role.enum';
+import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
+import { GameType } from 'src/common/enums/gameType';
 
 @Injectable()
 export class TeamsService {
   constructor(
+    private dataSource: DataSource,
     @InjectRepository(Team)
-    private teamsRepository: Repository<Team>
+    private teamsRepository: Repository<Team>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(TeamSection)
+    private teamSectionRepository: Repository<TeamSection>
   ) {}
 
   async create(createTeamDto: CreateTeamDto, user: User) {
+    const isUserRole = user.role === Role.USER
+  
     if (user.team) {
       throw new BadRequestException("Cannot create new team if user already belong to one")
     }
 
-    const teamSection = this.teamsRepository.create(createTeamDto);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    return this.teamsRepository.save(teamSection);
+    try {
+      const teamData = this.teamsRepository.create(createTeamDto);
+
+      const team = await queryRunner.manager.save(teamData);
+
+      if (isUserRole) {
+        const userData = this.userRepository.create({
+          id: user.id,
+          role: Role.SUPERVISOR,
+          team,
+        })
+  
+        const updatedUser = await queryRunner.manager.save(userData);
+  
+        const teamSecionData = this.teamSectionRepository.create({
+          team,
+          type: GameType.OneVsOne,
+          members: [updatedUser],
+        });
+
+        await queryRunner.manager.save(teamSecionData);
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (e) {
+      await queryRunner.rollbackTransaction();
+
+      throw new BadRequestException();
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   findAll(query?: PaginateQuery) {

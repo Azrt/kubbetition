@@ -49,6 +49,8 @@ export class EmailConfirmationService {
 
     const text = `Welcome to the application. To confirm the email address, click here: ${url}`;
 
+    console.log(url)
+
     return this.emailService.sendMail({
       to: email,
       subject: "Email confirmation",
