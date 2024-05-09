@@ -15,10 +15,8 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
     private readonly configService: ConfigService
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([(request: Request) => {
-        return request?.cookies?.Authentication;
-      }]),
-      secretOrKey: configService.get('JWT_SECRET')
+      jwtFromRequest: ExtractJwt.fromExtractors([(request: Request) => request?.cookies?.Authentication]),
+      secretOrKey: configService.get('JWT_SECRET'),
     });
   }
 

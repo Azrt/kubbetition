@@ -1,3 +1,4 @@
+import { Role } from 'src/common/enums/role.enum';
 import { Team } from 'src/teams/entities/team.entity';
 import {
   Entity,
@@ -37,5 +38,12 @@ export class User {
     nullable: true,
   })
   @JoinColumn()
-  team: Team;
+  team: Team | null;
+
+  @Column({
+    type: "enum",
+    enum: Role,
+    default: Role.USER,
+  })
+  role: Role;
 }

@@ -1,7 +1,7 @@
 import { Controller, Get, Body, Patch, Param, UseInterceptors } from '@nestjs/common';
 import { ScoresService } from './scores.service';
 import { UpdateScoreDto } from './dto/update-score.dto';
-import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
+import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { ScoreUpdateInterceptor } from './interceptors/score-update-interceptor';
 import { GameInProgressPipe } from './pipes/game-in-progress.pipe';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';

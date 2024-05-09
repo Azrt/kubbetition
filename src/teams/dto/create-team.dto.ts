@@ -15,9 +15,4 @@ export class CreateTeamDto {
   @ApiProperty()
   @IsBoolean()
   isActive: boolean;
-
-  @ApiProperty({ isArray: true })
-  @IsArray()
-  @IsInt({ each: true })
-  members: Array<number>;
 }

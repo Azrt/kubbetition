@@ -16,7 +16,7 @@ import { ThumbnailPipe } from 'src/common/pipes/thumbnail.pipe';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
+import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")

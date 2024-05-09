@@ -50,8 +50,9 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const team = await this.teamsService.findOne(updateUserDto.team);
-    return this.usersRepository.update(id, {
+    return this.usersRepository.save({
       ...updateUserDto,
+      id,
       team,
     });
   }

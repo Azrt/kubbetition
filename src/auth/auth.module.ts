@@ -14,6 +14,7 @@ import { JwtAuthGuard } from './guards/jwt.guard';
 import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
 import EmailService from 'src/email/email.service';
 import { EmailConfirmationGuard } from './guards/email-confirmation.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 const globalGuards = [
   {
@@ -23,7 +24,11 @@ const globalGuards = [
   {
     provide: APP_GUARD,
     useClass: EmailConfirmationGuard,
-  }
+  },
+  {
+    provide: APP_GUARD,
+    useClass: RolesGuard,
+  },
 ];
 
 @Module({

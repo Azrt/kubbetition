@@ -4,7 +4,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 import { Game } from './entities/game.entity';
-import { NotFoundInterceptor } from 'src/common/interceptors/not-found-interceptor';
+import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 

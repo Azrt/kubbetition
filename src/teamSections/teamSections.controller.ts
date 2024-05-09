@@ -19,7 +19,9 @@ import { TEAM_SECTIONS_PAGINATION_CONFIG } from "./teamSections.constants";
 import { UpdateTeamSectionDto } from "./dto/update-team-section.dto";
 import { GameType } from "src/common/enums/gameType";
 import { GameTypePipe } from "src/common/pipes/game-type.pipe";
-import { NotFoundInterceptor } from "src/common/interceptors/not-found-interceptor";
+import { NotFoundInterceptor } from "src/common/interceptors/not-found.interceptor";
+import { IncludeAdminRoles, Roles } from "src/common/decorators/roles.decorator";
+import { Role } from "src/common/enums/role.enum";
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("team-sections")
@@ -27,6 +29,7 @@ export class TeamSectionsController {
   constructor(private readonly teamSectionsService: TeamSectionsService) {}
 
   @Post()
+  @IncludeAdminRoles(Role.SUPERVISOR)
   create(@Body() createTeamSectionDto: CreateTeamSectionDto) {
     return this.teamSectionsService.create(createTeamSectionDto);
   }
@@ -56,6 +59,7 @@ export class TeamSectionsController {
   }
 
   @Patch(":id")
+  @IncludeAdminRoles(Role.SUPERVISOR)
   update(
     @Param("id") id: string,
     @Body() updateTeamSectionDto: UpdateTeamSectionDto
