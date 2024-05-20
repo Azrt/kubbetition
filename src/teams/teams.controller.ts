@@ -50,6 +50,7 @@ export class TeamsController {
 
   @Patch(":teamId")
   @UseGuards(SameTeamGuard)
+  @IncludeAdminRoles()
   @UseInterceptors(NotFoundInterceptor)
   update(
     @Param("teamId") teamId: string,

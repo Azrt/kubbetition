@@ -1,4 +1,5 @@
 import { Role } from 'src/common/enums/role.enum';
+import { TeamRequest } from 'src/teamRequests/entities/team-request.entity';
 import { Team } from 'src/teams/entities/team.entity';
 import {
   Entity,
@@ -7,6 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  OneToMany,
 } from 'typeorm';
 
 @Entity()
@@ -46,4 +48,10 @@ export class User {
     default: Role.USER,
   })
   role: Role;
+
+  @OneToMany(() => TeamRequest, (request) => request.user, {
+    nullable: true,
+    cascade: true,
+  })
+  teamRequests: Array<TeamRequest>
 }

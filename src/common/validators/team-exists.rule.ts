@@ -10,6 +10,8 @@ export class TeamExistsRule implements ValidatorConstraintInterface {
   ) {}
 
   async validate(id: number) {
+    if (!id) return false
+  
     const team = await this.teamsService.findOne(+id);
 
     return !!team;

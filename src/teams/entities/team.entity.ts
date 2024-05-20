@@ -1,4 +1,5 @@
 import { Common } from 'src/common/entities/CommonEntity';
+import { TeamRequest } from 'src/teamRequests/entities/team-request.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Column,
@@ -21,4 +22,10 @@ export class Team extends Common {
     nullable: true,
   })
   members: Array<User>;
+
+  @OneToMany(() => TeamRequest, (request) => request.user, {
+    nullable: true,
+    cascade: true,
+  })
+  teamRequests: Array<TeamRequest>;
 }
