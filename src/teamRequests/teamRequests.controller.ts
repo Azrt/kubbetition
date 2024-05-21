@@ -10,10 +10,7 @@ import { CurrentUser } from "src/common/decorators/currentUser.decorator";
 import { EmptyTeamGuard } from "src/common/guards/empty-team.guard";
 import { IncludeAdminRoles } from "src/common/decorators/roles.decorator";
 import { Role } from "src/common/enums/role.enum";
-import { TeamRequestExistsRule } from "./validators/team-request-exists.rule";
-import { Validate } from "class-validator";
 import { TeamRequestExistsPipe } from "./pipes/team-request-exists.pipe";
-import { SameTeamGuard } from "src/common/guards/same-team.guard";
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("team-requests")
@@ -46,6 +43,16 @@ export class TeamRequestsController {
     @CurrentUser() user: User
   ) {
     return this.teamRequestsService.acceptTeamRequest(+teamRequestId, user);
+  }
+
+  @Post(":teamRequestId/reject")
+  @IncludeAdminRoles(Role.SUPERVISOR)
+  rejectTeamRequest(
+    @Param("teamRequestId", TeamRequestExistsPipe)
+    teamRequestId: string,
+    @CurrentUser() user: User
+  ) {
+    return this.teamRequestsService.rejectTeamRequest(+teamRequestId, user);
   }
 
   @Delete(":teamRequestId")

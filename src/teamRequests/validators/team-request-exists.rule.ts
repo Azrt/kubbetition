@@ -14,7 +14,7 @@ export class TeamRequestExistsRule implements ValidatorConstraintInterface {
   async validate(id: number) {
     const teamRequests = await this.teamRequestsService.findByUserId(+id);
 
-    return !teamRequests;
+    return !teamRequests.length;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {

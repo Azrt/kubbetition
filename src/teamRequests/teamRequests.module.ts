@@ -10,6 +10,7 @@ import { UserExistsRule } from "src/common/validators/user-exists.rule";
 import { TeamsService } from "src/teams/teams.service";
 import { UsersService } from "src/users/users.service";
 import { TeamSection } from "src/teamSections/entities/teamSection.entity";
+import { TeamRequestExistsRule } from "./validators/team-request-exists.rule";
 
 @Module({
   imports: [TypeOrmModule.forFeature([Team, User, TeamRequest, TeamSection])],
@@ -18,6 +19,7 @@ import { TeamSection } from "src/teamSections/entities/teamSection.entity";
     TeamRequestsService,
     TeamExistsRule,
     UserExistsRule,
+    TeamRequestExistsRule,
     TeamsService,
     UsersService,
   ],

@@ -9,6 +9,8 @@ import { User } from "src/users/entities/user.entity";
 import { Team } from "src/teams/entities/team.entity";
 import { TeamRequestStatus } from "./enums/teamRequestStatus.enum";
 import { isAdminRole, isUserRole } from "src/common/helpers/user";
+import { TeamSection } from "src/teamSections/entities/teamSection.entity";
+import { GameType } from "src/common/enums/gameType";
 
 @Injectable()
 export class TeamRequestsService {
@@ -19,6 +21,8 @@ export class TeamRequestsService {
     private teamsRepository: Repository<Team>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(TeamSection)
+    private teamSectionsRepositiory: Repository<TeamSection>,
     private dataSource: DataSource
   ) {}
 
@@ -30,17 +34,19 @@ export class TeamRequestsService {
     } = createTeamRequestDto;
     const isAdmin = isAdminRole(initialUser);
 
-    if (isAdmin && !dtoUser) throw new BadRequestException("Missing user id")
+    if (isAdmin && !dtoUser) throw new BadRequestException("Missing user id");
 
     const team = this.teamsRepository.create({ id: dtoTeam });
     const user = this.usersRepository.create({
       id: isAdmin ? dtoUser : initialUser.id,
     });
 
-    const existingTeamRequest = await this.findByUserId(user.id);
+    const hasExistingTeamRequest = await this.findByUserId(user.id);
 
-    if (existingTeamRequest) throw new BadRequestException("User already has a team request")
-  
+    if (hasExistingTeamRequest) {
+      throw new BadRequestException("User already has a team request");
+    }
+
     const teamRequest = this.teamRequestsRepository.create({
       ...teamRequestData,
       user,
@@ -53,7 +59,7 @@ export class TeamRequestsService {
   findOne(id: number) {
     return this.teamRequestsRepository.findOne({
       where: { id },
-      relations: ['team', 'user'],
+      relations: ["team", "user"],
     });
   }
 
@@ -76,7 +82,7 @@ export class TeamRequestsService {
   findByUserId(id: number) {
     return this.teamRequestsRepository.find({
       where: {
-        status: In([TeamRequestStatus.IN_PROGRESS, TeamRequestStatus.BLOCKED]),
+        status: TeamRequestStatus.IN_PROGRESS,
         user: {
           id,
         },
@@ -84,7 +90,22 @@ export class TeamRequestsService {
     });
   }
 
-  async acceptTeamRequest(id: number, user: User) {
+  async isFromSameTeam(id: number, user: User) {
+    const teamRequest = await this.findOne(id);
+    const isAdmin = isAdminRole(user);
+
+    if (teamRequest.status !== TeamRequestStatus.IN_PROGRESS) {
+      throw new BadRequestException("Team request is not in progress");
+    }
+
+    if (!isAdmin && teamRequest.team.id !== user.team.id) {
+      throw new BadRequestException("User is from different team");
+    }
+
+    return teamRequest;
+  }
+
+  async acceptTeamRequest(id: number, userRequest: User) {
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -92,18 +113,25 @@ export class TeamRequestsService {
     await queryRunner.startTransaction();
 
     try {
-      const teamRequest = await this.findOne(id)
+      const teamRequest = await this.isFromSameTeam(id, userRequest);
 
       const team = this.teamsRepository.create({
         id: teamRequest.team.id,
-      })
-  
+      });
+
       const user = this.usersRepository.create({
         id: teamRequest.user.id,
         team,
-      })
-  
+      });
+
       const updatedUser = await queryRunner.manager.save(user);
+
+      const teamSection = this.teamSectionsRepositiory.create({
+        type: GameType.OneVsOne,
+        team,
+        members: [updatedUser],
+      });
+
 
       const updatedTeamRequest = this.teamRequestsRepository.create({
         id: teamRequest.id,
@@ -111,14 +139,28 @@ export class TeamRequestsService {
         user: updatedUser,
       });
 
+      await queryRunner.manager.save(teamSection);
       await queryRunner.manager.save(updatedTeamRequest);
+
+      await queryRunner.commitTransaction();
     } catch (e) {
       await queryRunner.rollbackTransaction();
 
-      throw new BadRequestException();
+      throw new BadRequestException(e.message);
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async rejectTeamRequest(id: number, userRequest: User) {
+    const teamRequest = await this.isFromSameTeam(id, userRequest);
+
+    const updatedTeamRequest = this.teamRequestsRepository.create({
+      id: teamRequest.id,
+      status: TeamRequestStatus.REJECTED,
+    });
+
+    return this.teamRequestsRepository.save(updatedTeamRequest);
   }
 
   remove(id: number) {
