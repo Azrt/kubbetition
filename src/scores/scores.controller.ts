@@ -1,11 +1,11 @@
-import { Controller, Get, Body, Patch, Param, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Body, Patch, Param, UseInterceptors, Post } from '@nestjs/common';
 import { ScoresService } from './scores.service';
 import { UpdateScoreDto } from './dto/update-score.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
-import { ScoreUpdateInterceptor } from './interceptors/score-update-interceptor';
 import { GameInProgressPipe } from './pipes/game-in-progress.pipe';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { GameNotReadysPipe } from './pipes/game-not-ready.pipe';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("scores")
@@ -17,10 +17,10 @@ export class ScoresController {
     return this.scoresService.findAll();
   }
 
-  @Get(":id")
+  @Get(":scoreId")
   @UseInterceptors(NotFoundInterceptor)
-  findOne(@Param("id") id: string) {
-    return this.scoresService.findOne(+id);
+  findOne(@Param("scoreId") scoreId: string) {
+    return this.scoresService.findOne(+scoreId);
   }
 
   @Get("/game/:id")
@@ -29,12 +29,17 @@ export class ScoresController {
     return this.scoresService.findScoresByGame(+id);
   }
 
-  @Patch(":id")
-  @UseInterceptors(ScoreUpdateInterceptor)
+  @Patch(":scoreId")
+  @UseInterceptors(NotFoundInterceptor)
   update(
-    @Param("id", GameInProgressPipe) id: string,
+    @Param("scoreId", GameInProgressPipe, GameNotReadysPipe) scoreId: string,
     @Body() updateScoreDto: UpdateScoreDto
   ) {
-    return this.scoresService.update(+id, updateScoreDto);
+    return this.scoresService.update(+scoreId, updateScoreDto);
+  }
+
+  @Post(":scoreId/ready")
+  setReadyState(@Param("scoreId", GameInProgressPipe) scoreId: string) {
+    this.scoresService.setReadyState(+scoreId);
   }
 }

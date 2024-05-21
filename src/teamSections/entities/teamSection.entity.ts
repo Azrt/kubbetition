@@ -53,10 +53,4 @@ export class TeamSection {
     nullable: true,
   })
   scores: Array<Score>;
-
-  @OneToMany(() => Game, (game) => game.winner, {
-    cascade: true,
-    nullable: true,
-  })
-  wins: Array<Game>;
 }

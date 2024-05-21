@@ -27,4 +27,7 @@ export class Score extends Common {
 
   @Column({ default: null })
   gameId: number;
+
+  @Column({ default: false, type: 'boolean' })
+  isReady: boolean;
 }

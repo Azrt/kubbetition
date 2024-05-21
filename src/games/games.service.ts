@@ -80,8 +80,8 @@ export class GamesService {
     return paginate(query, this.gamesRepository, GAMES_PAGINATION_CONFIG);
   }
 
-  async findOne(id: number) {
-    return await this.gamesRepository.findOne({
+  findOne(id: number) {
+    return this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
       where: {
         id,

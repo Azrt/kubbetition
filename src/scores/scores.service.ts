@@ -45,4 +45,10 @@ export class ScoresService {
   
     return this.scoresRepository.findOne({ relations: SCORE_RELATIONS, where: { id } })
   }
+
+  async setReadyState(scoreId: number) {
+    const score = this.scoresRepository.create({ id: scoreId, isReady: true });
+
+    return this.scoresRepository.save(score)
+  }
 }

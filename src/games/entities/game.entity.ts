@@ -3,7 +3,7 @@ import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
 import { Score } from "src/scores/entities/score.entity";
 import { TeamSection } from "src/teamSections/entities/teamSection.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
+import { AfterLoad, Column, Entity, JoinColumn, OneToMany } from "typeorm";
 
 @Entity()
 export class Game extends Common {
@@ -20,14 +20,6 @@ export class Game extends Common {
   })
   type: GameType;
 
-  @ManyToOne(() => TeamSection, (section) => section.wins, {
-    onDelete: "SET NULL",
-    onUpdate: "NO ACTION",
-    nullable: true,
-  })
-  @JoinColumn()
-  winner: TeamSection;
-
   @IsArray()
   @MaxLength(2, { each: true })
   @MinLength(2, { each: true })
@@ -36,4 +28,29 @@ export class Game extends Common {
   })
   @JoinColumn()
   scores: [Score, Score];
+
+  isGameReady: boolean;
+
+  winner: null | TeamSection;
+
+  @AfterLoad()
+  setIsReady() {
+    this.isGameReady = !!this.scores?.every((score) => score.isReady);
+  }
+
+  @AfterLoad()
+  setWinner() {
+    const winningScore = this.scores?.reduce<Score | null>(
+      (accumulator, current) => {
+        if (current.score && current.score > (accumulator?.score ?? 0)) {
+          return current;
+        }
+
+        return accumulator;
+      },
+      null
+    );
+  
+    this.winner = winningScore?.teamSection ?? null;
+  }
 }
