@@ -20,6 +20,12 @@ export class Game extends Common {
   })
   type: GameType;
 
+  @Column({
+    type: "int",
+    default: 20,
+  })
+  duration: number;
+
   @IsArray()
   @MaxLength(2, { each: true })
   @MinLength(2, { each: true })
@@ -34,23 +40,22 @@ export class Game extends Common {
   winner: null | TeamSection;
 
   @AfterLoad()
-  setIsReady() {
-    this.isGameReady = !!this.scores?.every((score) => score.isReady);
-  }
-
-  @AfterLoad()
-  setWinner() {
-    const winningScore = this.scores?.reduce<Score | null>(
-      (accumulator, current) => {
-        if (current.score && current.score > (accumulator?.score ?? 0)) {
-          return current;
-        }
-
-        return accumulator;
-      },
-      null
-    );
+  afterLoad() {
+    if (this.endTime) {
+      const winningScore = this.scores?.reduce<Score | null>(
+        (accumulator, current) => {
+          if (current.score && current.score > (accumulator?.score ?? 0)) {
+            return current;
+          }
   
-    this.winner = winningScore?.teamSection ?? null;
+          return accumulator;
+        },
+        null
+      );
+  
+      this.winner = winningScore?.teamSection ?? null;
+    }
+
+    this.isGameReady = !!this.scores?.every((score) => score.isReady);
   }
 }

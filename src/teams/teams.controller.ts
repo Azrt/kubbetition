@@ -35,7 +35,7 @@ export class TeamsController {
   create(@Body() createTeamDto: CreateTeamDto, @CurrentUser() user: User) {
     return this.teamsService.create(createTeamDto, user);
   }
-
+ 
   @Get()
   @PaginatedSwaggerDocs(CreateTeamDto, TEAMS_PAGINATION_CONFIG)
   findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Team>> {

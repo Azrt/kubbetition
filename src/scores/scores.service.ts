@@ -1,15 +1,18 @@
-import { Injectable, UseInterceptors } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { UpdateScoreDto } from './dto/update-score.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Score } from './entities/score.entity';
 import { Repository } from 'typeorm';
 import { SCORE_RELATIONS } from './scores.constants';
+import { User } from 'src/users/entities/user.entity';
+import { TeamSectionsService } from 'src/teamSections/teamSections.service';
 
 @Injectable()
 export class ScoresService {
   constructor(
     @InjectRepository(Score)
-    private scoresRepository: Repository<Score>
+    private scoresRepository: Repository<Score>,
+    private teamSectionsService: TeamSectionsService
   ) {}
   findAll() {
     return this.scoresRepository.find({
@@ -18,7 +21,7 @@ export class ScoresService {
   }
 
   findOne(id: number) {
-    return this.scoresRepository.find({
+    return this.scoresRepository.findOne({
       relations: SCORE_RELATIONS,
       where: {
         id,
@@ -37,7 +40,7 @@ export class ScoresService {
     });
   }
 
-  async update(id: number, updateScoreDto: UpdateScoreDto) {
+  async update(id: number, updateScoreDto: UpdateScoreDto, user: User) {
     await this.scoresRepository.save({
       id,
       ...updateScoreDto,
@@ -46,9 +49,9 @@ export class ScoresService {
     return this.scoresRepository.findOne({ relations: SCORE_RELATIONS, where: { id } })
   }
 
-  async setReadyState(scoreId: number) {
-    const score = this.scoresRepository.create({ id: scoreId, isReady: true });
+  async setReadyState(scoreId: number, user: User) {
+    const scoreToUpdate = this.scoresRepository.create({ id: scoreId, isReady: true });
 
-    return this.scoresRepository.save(score)
+    return this.scoresRepository.save(scoreToUpdate);
   }
 }

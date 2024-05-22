@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsArray, IsDate, IsDateString, IsDefined, IsEnum, IsInt } from "class-validator";
+import { IsDateString, IsDefined, IsEnum, IsInt, Max, Min } from "class-validator";
 import { GameType } from "src/common/enums/gameType";
 
 export class CreateGameDto {
@@ -20,4 +20,10 @@ export class CreateGameDto {
 
   @IsDefined()
   secondSection: number;
+
+  @IsDefined()
+  @Min(5)
+  @Max(60)
+  @IsInt()
+  duration: number;
 }

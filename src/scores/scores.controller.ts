@@ -2,10 +2,13 @@ import { Controller, Get, Body, Patch, Param, UseInterceptors, Post } from '@nes
 import { ScoresService } from './scores.service';
 import { UpdateScoreDto } from './dto/update-score.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
-import { GameInProgressPipe } from './pipes/game-in-progress.pipe';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { GameNotReadysPipe } from './pipes/game-not-ready.pipe';
+import { User } from 'src/users/entities/user.entity';
+import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
+import { UpdateScoreParamsDto } from "./dto/update-score-params.dto";
+import { ScoreReadyParamsDto } from "./dto/score-ready-params.dto";
+import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("scores")
@@ -30,16 +33,21 @@ export class ScoresController {
   }
 
   @Patch(":scoreId")
-  @UseInterceptors(NotFoundInterceptor)
+  @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
   update(
-    @Param("scoreId", GameInProgressPipe, GameNotReadysPipe) scoreId: string,
-    @Body() updateScoreDto: UpdateScoreDto
+    @Param() params: UpdateScoreParamsDto,
+    @Body() updateScoreDto: UpdateScoreDto,
+    @CurrentUser() user: User
   ) {
-    return this.scoresService.update(+scoreId, updateScoreDto);
+    return this.scoresService.update(+params.scoreId, updateScoreDto, user);
   }
 
   @Post(":scoreId/ready")
-  setReadyState(@Param("scoreId", GameInProgressPipe) scoreId: string) {
-    this.scoresService.setReadyState(+scoreId);
+  @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
+  setReadyState(
+    @Param() params: ScoreReadyParamsDto,
+    @CurrentUser() user: User
+  ) {
+    return this.scoresService.setReadyState(+params.scoreId, user);
   }
 }
