@@ -6,18 +6,18 @@ import {
 } from "class-validator";
 import { TeamRequestsService } from "../teamRequests.service";
 
-@ValidatorConstraint({ async: true, name: "TeamRequestExists" })
+@ValidatorConstraint({ async: true, name: "UserTeamRequestExists" })
 @Injectable()
-export class TeamRequestExistsRule implements ValidatorConstraintInterface {
+export class UserTeamRequestExistsRule implements ValidatorConstraintInterface {
   constructor(private teamRequestsService: TeamRequestsService) {}
 
   async validate(id: number) {
-    const teamRequest = await this.teamRequestsService.findOne(id);
+    const teamRequests = await this.teamRequestsService.findByUserId(+id);
 
-    return !!teamRequest;
+    return !teamRequests.length;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {
-    return "Team request doesn't exists";
+    return "Team request doesn`t exists";
   }
 }

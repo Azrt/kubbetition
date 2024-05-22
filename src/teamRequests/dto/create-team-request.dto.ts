@@ -2,7 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 import { IsInt, IsOptional, IsString, Validate } from "class-validator";
 import { TeamExistsRule } from "src/common/validators/team-exists.rule";
 import { UserExistsRule } from "src/common/validators/user-exists.rule";
-import { TeamRequestExistsRule } from "../validators/team-request-exists.rule";
+import { UserTeamRequestExistsRule } from "../validators/user-team-request-exists.rule";
 
 export class CreateTeamRequestDto {
   @ApiProperty()
@@ -18,6 +18,6 @@ export class CreateTeamRequestDto {
   @IsInt()
   @IsOptional()
   @Validate(UserExistsRule)
-  @Validate(TeamRequestExistsRule)
+  @Validate(UserTeamRequestExistsRule)
   user: number;
 }

@@ -10,6 +10,7 @@ import { UserExistsRule } from "src/common/validators/user-exists.rule";
 import { TeamsService } from "src/teams/teams.service";
 import { UsersService } from "src/users/users.service";
 import { TeamSection } from "src/teamSections/entities/teamSection.entity";
+import { UserTeamRequestExistsRule } from "./validators/user-team-request-exists.rule";
 import { TeamRequestExistsRule } from "./validators/team-request-exists.rule";
 
 @Module({
@@ -19,6 +20,7 @@ import { TeamRequestExistsRule } from "./validators/team-request-exists.rule";
     TeamRequestsService,
     TeamExistsRule,
     UserExistsRule,
+    UserTeamRequestExistsRule,
     TeamRequestExistsRule,
     TeamsService,
     UsersService,

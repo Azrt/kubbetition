@@ -90,8 +90,6 @@ export class AuthService {
     try {
       const newUser = await this.usersService.create(user);
 
-      await this.emailConfirmationService.sendVerificationLink(newUser.email);
-
       return newUser;
     } catch {
       throw new BadRequestException();

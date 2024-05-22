@@ -29,7 +29,8 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ default: false })
+  // TODO: Update when there will be different type of user registration
+  @Column({ default: true })
   isEmailConfirmed: boolean;
 
   @Column({ nullable: true, length: 450 })

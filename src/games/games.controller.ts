@@ -13,6 +13,7 @@ import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 export class GamesController {
   constructor(private readonly gamesService: GamesService) {}
 
+  // TODO: Add user validation, prevent game with same user in different teams
   @Post()
   create(@Body() createGameDto: CreateGameDto) {
     return this.gamesService.create(createGameDto);
