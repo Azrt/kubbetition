@@ -11,6 +11,8 @@ import { TeamSectionMembers } from 'src/teamSections/entities/teamSectionMembers
 import { GameInProgressRule } from './validation/game-in-progress.rule';
 import { GameReadyRule } from './validation/game-ready.rule';
 import { GameUserRule } from './validation/game-user.rule';
+import { ScoreReadyListener } from './listeners/score-ready.listener';
+import { ScoreUpdateListener } from './listeners/score-update.listener';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { GameUserRule } from './validation/game-user.rule';
     GameInProgressRule,
     GameReadyRule,
     GameUserRule,
+    ScoreReadyListener,
+    ScoreUpdateListener,
   ],
 })
 export class ScoresModule {}

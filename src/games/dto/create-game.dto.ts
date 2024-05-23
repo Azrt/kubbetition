@@ -7,11 +7,6 @@ export class CreateGameDto {
   readonly id: number;
 
   @ApiProperty()
-  @IsDateString()
-  @IsDefined()
-  startTime: string;
-
-  @ApiProperty()
   @IsEnum(GameType)
   type: GameType;
 

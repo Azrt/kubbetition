@@ -8,7 +8,7 @@ import { AfterLoad, Column, Entity, JoinColumn, OneToMany } from "typeorm";
 @Entity()
 export class Game extends Common {
   @Column({ type: "timestamptz", nullable: true })
-  startTime: Date;
+  startTime: Date | null;
 
   @Column({ type: "timestamptz", nullable: true })
   endTime: Date | null;

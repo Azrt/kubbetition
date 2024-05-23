@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
+import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ConfigModule } from '@nestjs/config';
 import { GoogleStrategy } from './google.strategy';
 import { DataSource } from 'typeorm';
@@ -56,6 +57,9 @@ const configValidationSchema = Joi.object({
       envFilePath: [".local.env", ".env"],
       isGlobal: true,
       validationSchema: configValidationSchema,
+    }),
+    EventEmitterModule.forRoot({
+      verboseMemoryLeak: process.env.NODE_ENV !== "production",
     }),
     DevtoolsModule.register({
       http: process.env.NODE_ENV !== "production",

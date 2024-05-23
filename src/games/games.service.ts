@@ -3,7 +3,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { DataSource, EntitySubscriberInterface, EventSubscriber, In, InsertEvent, Repository, UpdateEvent } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Score } from 'src/scores/entities/score.entity';
 import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
@@ -37,7 +37,7 @@ export class GamesService {
       const firstTeamSection = this.teamSectionsRepository.create({
         id: firstSection,
       });
-  
+
       const secondTeamSection = this.teamSectionsRepository.create({
         id: secondSection,
       });
@@ -70,10 +70,21 @@ export class GamesService {
   }
 
   endGame(id: number) {
-    return this.gamesRepository.save({
+    const game = this.gamesRepository.create({
       id,
       endTime: new Date().toISOString(),
-    })
+    });
+
+    return this.gamesRepository.save(game);
+  }
+
+  startGame(id: number) {
+    const game = this.gamesRepository.create({
+      id,
+      startTime: new Date().toISOString(),
+    });
+
+    return this.gamesRepository.save(game);
   }
 
   findAll(query?: PaginateQuery) {
