@@ -4,7 +4,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from "class-validator";
-import { isUserRole } from "src/common/helpers/user";
+import { isAdminRole, isUserRole } from "src/common/helpers/user";
 import { ScoresService } from "../scores.service";
 import { TeamSectionsService } from "src/teamSections/teamSections.service";
 
@@ -20,9 +20,9 @@ export class GameUserRule implements ValidatorConstraintInterface {
     const user = (validationArguments.object as Record<string, any>)?.context
       ?.user;
 
-    const isUser = isUserRole(user);
+    const isAdmin = isAdminRole(user);
 
-    if (!isUser) return true;
+    if (isAdmin) return true;
 
     const score = await this.scoreService.findOne(+scoreId);
     const teamSections = await this.teamSectionsService.findByMembers([
