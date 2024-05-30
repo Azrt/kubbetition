@@ -1,5 +1,6 @@
 import { Role } from 'src/common/enums/role.enum';
-import { TeamRequest } from 'src/teamRequests/entities/team-request.entity';
+import { Game } from 'src/games/entities/game.entity';
+import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { Team } from 'src/teams/entities/team.entity';
 import {
   Entity,
@@ -54,5 +55,8 @@ export class User {
     nullable: true,
     cascade: true,
   })
-  teamRequests: Array<TeamRequest>
+  teamRequests: Array<TeamRequest>;
+
+  @OneToMany(() => Game, (game) => game.createdBy)
+  games: Array<Game>;
 }

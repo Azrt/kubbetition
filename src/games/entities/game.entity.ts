@@ -2,8 +2,8 @@ import { IsArray, MaxLength, MinLength } from "class-validator";
 import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
 import { Score } from "src/scores/entities/score.entity";
-import { TeamSection } from "src/teamSections/entities/teamSection.entity";
-import { AfterLoad, Column, Entity, JoinColumn, OneToMany } from "typeorm";
+import { User } from "src/users/entities/user.entity";
+import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
 
 @Entity()
 export class Game extends Common {
@@ -12,6 +12,9 @@ export class Game extends Common {
 
   @Column({ type: "timestamptz", nullable: true })
   endTime: Date | null;
+
+  @ManyToOne(() => User, (user) => user.games, { nullable: true })
+  createdBy: User;
 
   @Column({
     type: "enum",
@@ -37,7 +40,7 @@ export class Game extends Common {
 
   isGameReady: boolean;
 
-  winner: null | TeamSection;
+  winner: null | Score;
 
   @AfterLoad()
   afterLoad() {
@@ -47,13 +50,13 @@ export class Game extends Common {
           if (current.score && current.score > (accumulator?.score ?? 0)) {
             return current;
           }
-  
+
           return accumulator;
         },
         null
       );
-  
-      this.winner = winningScore?.teamSection ?? null;
+
+      this.winner = winningScore;
     }
 
     this.isGameReady = !!this.scores?.every((score) => score.isReady);

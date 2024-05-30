@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/c
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
 import { ApiBearerAuth } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
-import { TeamRequestsService } from "./teamRequests.service";
+import { TeamRequestsService } from "./team-requests.service";
 import { Paginate, PaginateQuery, Paginated } from "nestjs-paginate";
 import { TeamRequest } from "./entities/team-request.entity";
 import { User } from "src/users/entities/user.entity";

@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
-import { UpdateTeamDto } from './dto/update-team.dto';
+import { UpdateTeamMembersDto } from "./dto/update-team.dto";
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
@@ -35,7 +35,7 @@ export class TeamsController {
   create(@Body() createTeamDto: CreateTeamDto, @CurrentUser() user: User) {
     return this.teamsService.create(createTeamDto, user);
   }
- 
+
   @Get()
   @PaginatedSwaggerDocs(CreateTeamDto, TEAMS_PAGINATION_CONFIG)
   findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Team>> {
@@ -54,7 +54,7 @@ export class TeamsController {
   @UseInterceptors(NotFoundInterceptor)
   update(
     @Param("teamId") teamId: string,
-    @Body() updateTeamDto: UpdateTeamDto
+    @Body() updateTeamDto: UpdateTeamMembersDto
   ) {
     return this.teamsService.update(+teamId, updateTeamDto);
   }

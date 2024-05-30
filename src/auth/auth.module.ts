@@ -15,7 +15,6 @@ import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
 import EmailService from 'src/email/email.service';
 import { EmailConfirmationGuard } from './guards/email-confirmation.guard';
 import { RolesGuard } from './guards/roles.guard';
-import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 
 const globalGuards = [
   {
@@ -46,7 +45,7 @@ const globalGuards = [
         },
       }),
     }),
-    TypeOrmModule.forFeature([User, Team, TeamSection]),
+    TypeOrmModule.forFeature([User, Team]),
   ],
   controllers: [AuthController],
   providers: [

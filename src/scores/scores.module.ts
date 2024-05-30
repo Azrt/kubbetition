@@ -5,24 +5,21 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Game } from 'src/games/entities/game.entity';
 import { Score } from './entities/score.entity';
 import { GamesService } from 'src/games/games.service';
-import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
-import { TeamSectionsService } from 'src/teamSections/teamSections.service';
-import { TeamSectionMembers } from 'src/teamSections/entities/teamSectionMembers.entity';
 import { GameInProgressRule } from './validation/game-in-progress.rule';
 import { GameReadyRule } from './validation/game-ready.rule';
 import { GameUserRule } from './validation/game-user.rule';
 import { ScoreReadyListener } from './listeners/score-ready.listener';
 import { ScoreUpdateListener } from './listeners/score-update.listener';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Game, Score, TeamSection, TeamSectionMembers]),
+    TypeOrmModule.forFeature([Game, Score, User]),
   ],
   controllers: [ScoresController],
   providers: [
     ScoresService,
     GamesService,
-    TeamSectionsService,
     GameInProgressRule,
     GameReadyRule,
     GameUserRule,

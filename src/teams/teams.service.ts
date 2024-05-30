@@ -5,10 +5,9 @@ import { Team } from './entities/team.entity';
 import { DataSource, Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
-import { UpdateTeamDto } from './dto/update-team.dto';
+import { UpdateTeamMembersDto } from "./dto/update-team.dto";
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/common/enums/role.enum';
-import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 import { GameType } from 'src/common/enums/gameType';
 
 @Injectable()
@@ -18,16 +17,16 @@ export class TeamsService {
     @InjectRepository(Team)
     private teamsRepository: Repository<Team>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    @InjectRepository(TeamSection)
-    private teamSectionRepository: Repository<TeamSection>
+    private userRepository: Repository<User>
   ) {}
 
   async create(createTeamDto: CreateTeamDto, user: User) {
-    const isUserRole = user.role === Role.USER
-  
+    const isUserRole = user.role === Role.USER;
+
     if (user.team) {
-      throw new BadRequestException("Cannot create new team if user already belong to one")
+      throw new BadRequestException(
+        "Cannot create new team if user already belong to one"
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -44,17 +43,9 @@ export class TeamsService {
           id: user.id,
           role: Role.SUPERVISOR,
           team,
-        })
-  
-        const updatedUser = await queryRunner.manager.save(userData);
-  
-        const teamSecionData = this.teamSectionRepository.create({
-          team,
-          type: GameType.OneVsOne,
-          members: [updatedUser],
         });
 
-        await queryRunner.manager.save(teamSecionData);
+        await queryRunner.manager.save(userData);
       }
 
       await queryRunner.commitTransaction();
@@ -78,17 +69,17 @@ export class TeamsService {
     });
   }
 
-  async update(id: number, updateTeamDto: UpdateTeamDto) {
-    const teamSection = this.teamsRepository.create(
+  async update(id: number, updateTeamDto: UpdateTeamMembersDto) {
+    const team = this.teamsRepository.create(
       updateTeamDto as unknown as Team
     );
-    teamSection.id = id;
+    team.id = id;
 
     if (updateTeamDto.members) {
-      teamSection.members = updateTeamDto.members.map((id) => ({ id }) as User);
+      team.members = updateTeamDto.members.map((id) => ({ id }) as User);
     }
 
-    return this.teamsRepository.save(teamSection);
+    return this.teamsRepository.save(team);
   }
 
   remove(id: number) {

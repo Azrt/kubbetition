@@ -6,7 +6,7 @@ import {
   Column,
   ManyToOne,
 } from "typeorm";
-import { TeamRequestStatus } from "../enums/teamRequestStatus.enum";
+import { TeamRequestStatus } from "../enums/team-request-status.enum";
 import { User } from "src/users/entities/user.entity";
 
 @Entity()

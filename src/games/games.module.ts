@@ -1,18 +1,27 @@
 import { Module } from '@nestjs/common';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
-import { TeamSectionsService } from 'src/teamSections/teamSections.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 import { Game } from './entities/game.entity';
-import { TeamSectionMembers } from 'src/teamSections/entities/teamSectionMembers.entity';
 import { Score } from 'src/scores/entities/score.entity';
+import { User } from 'src/users/entities/user.entity';
+import { TeamMembersExistsRule } from './validation/team-members-exists.rule';
+import { TeamMembersNumberRule } from './validation/team-members-number.rule';
+import { UniqueMembersRule } from './validation/unique-members.rule';
+import { UsersService } from 'src/users/users.service';
+import { TeamsService } from 'src/teams/teams.service';
+import { Team } from 'src/teams/entities/team.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([TeamSection, Game, TeamSectionMembers, Score]),
-  ],
+  imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
   controllers: [GamesController],
-  providers: [GamesService, TeamSectionsService],
+  providers: [
+    GamesService,
+    UsersService,
+    TeamsService,
+    TeamMembersExistsRule,
+    TeamMembersNumberRule,
+    UniqueMembersRule,
+  ],
 })
 export class GamesModule {}

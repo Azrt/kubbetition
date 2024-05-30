@@ -4,7 +4,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from "class-validator";
-import { TeamRequestsService } from "../teamRequests.service";
+import { TeamRequestsService } from "../team-requests.service";
 
 @ValidatorConstraint({ async: true, name: "TeamRequestExists" })
 @Injectable()

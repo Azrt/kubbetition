@@ -6,14 +6,12 @@ import {
 } from "class-validator";
 import { isAdminRole, isUserRole } from "src/common/helpers/user";
 import { ScoresService } from "../scores.service";
-import { TeamSectionsService } from "src/teamSections/teamSections.service";
 
 @ValidatorConstraint({ async: true, name: "GameUser" })
 @Injectable()
 export class GameUserRule implements ValidatorConstraintInterface {
   constructor(
-    private scoreService: ScoresService,
-    private teamSectionsService: TeamSectionsService
+    private scoreService: ScoresService
   ) {}
 
   async validate(scoreId: string, validationArguments: ValidationArguments) {
@@ -25,13 +23,16 @@ export class GameUserRule implements ValidatorConstraintInterface {
     if (isAdmin) return true;
 
     const score = await this.scoreService.findOne(+scoreId);
-    const teamSections = await this.teamSectionsService.findByMembers([
-      user.id,
-    ]);
+    // const teamSections = await this.teamSectionsService.findByMembers([
+    //   user.id,
+    // ]);
 
-    if (!score || !teamSections) return true
+    if (!score) return true;
 
-    return teamSections.some(({ team_section_id }) => team_section_id === score?.teamSectionId)
+    // if (!score || !teamSections) return true
+
+    // return teamSections.some(({ team_section_id }) => team_section_id === score?.teamSectionId)
+    return true;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {

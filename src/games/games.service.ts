@@ -5,9 +5,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
 import { DataSource, Repository } from 'typeorm';
 import { Score } from 'src/scores/entities/score.entity';
-import { TeamSection } from 'src/teamSections/entities/teamSection.entity';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class GamesService {
@@ -16,11 +16,11 @@ export class GamesService {
     private gamesRepository: Repository<Game>,
     @InjectRepository(Score)
     private scoresRepository: Repository<Score>,
-    @InjectRepository(TeamSection)
-    private teamSectionsRepository: Repository<TeamSection>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
     private dataSource: DataSource
   ) {}
-  async create(createGameDto: CreateGameDto) {
+  async create(createGameDto: CreateGameDto, currentUser: User) {
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -28,28 +28,31 @@ export class GamesService {
     await queryRunner.startTransaction();
 
     try {
-      const { firstSection, secondSection, ...data } = createGameDto;
+      const { firstTeam, secondTeam, ...data } = createGameDto;
 
-      const gameData = await this.gamesRepository.create(data);
+      const gameData = await this.gamesRepository.create({
+        ...data,
+        createdBy: currentUser,
+      });
 
       const game = await queryRunner.manager.save(gameData);
 
-      const firstTeamSection = this.teamSectionsRepository.create({
-        id: firstSection,
-      });
+      const firstTeamMembers = firstTeam.map((id) =>
+        this.usersRepository.create({ id })
+      );
 
-      const secondTeamSection = this.teamSectionsRepository.create({
-        id: secondSection,
-      });
+      const secondTeamMembers = secondTeam.map((id) =>
+        this.usersRepository.create({ id })
+      );
 
       const firstTeamScoreData = this.scoresRepository.create({
-        teamSection: firstTeamSection,
+        members: firstTeamMembers,
         score: null,
         game,
       });
 
       const secondTeamScoreData = this.scoresRepository.create({
-        teamSection: secondTeamSection,
+        members: secondTeamMembers,
         score: null,
         game,
       });

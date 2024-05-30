@@ -1,5 +1,5 @@
 export const SCORE_RELATIONS = [
-  "teamSection",
-  "teamSection.team",
+  "members",
+  "members.team",
   "game",
 ];

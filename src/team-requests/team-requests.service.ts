@@ -4,12 +4,11 @@ import { DataSource, In, Repository } from "typeorm";
 import { TeamRequest } from "./entities/team-request.entity";
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
 import { PaginateConfig, PaginateQuery, paginate } from "nestjs-paginate";
-import { TEAM_REQUESTS_PAGINATION_CONFIG } from "./teamRequests.constants";
+import { TEAM_REQUESTS_PAGINATION_CONFIG } from "./team-requests.constants";
 import { User } from "src/users/entities/user.entity";
 import { Team } from "src/teams/entities/team.entity";
-import { TeamRequestStatus } from "./enums/teamRequestStatus.enum";
+import { TeamRequestStatus } from "./enums/team-request-status.enum";
 import { isAdminRole, isUserRole } from "src/common/helpers/user";
-import { TeamSection } from "src/teamSections/entities/teamSection.entity";
 import { GameType } from "src/common/enums/gameType";
 
 @Injectable()
@@ -21,8 +20,6 @@ export class TeamRequestsService {
     private teamsRepository: Repository<Team>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    @InjectRepository(TeamSection)
-    private teamSectionsRepositiory: Repository<TeamSection>,
     private dataSource: DataSource
   ) {}
 
@@ -126,20 +123,12 @@ export class TeamRequestsService {
 
       const updatedUser = await queryRunner.manager.save(user);
 
-      const teamSection = this.teamSectionsRepositiory.create({
-        type: GameType.OneVsOne,
-        team,
-        members: [updatedUser],
-      });
-
-
       const updatedTeamRequest = this.teamRequestsRepository.create({
         id: teamRequest.id,
         status: TeamRequestStatus.APPROVED,
         user: updatedUser,
       });
 
-      await queryRunner.manager.save(teamSection);
       await queryRunner.manager.save(updatedTeamRequest);
 
       await queryRunner.commitTransaction();

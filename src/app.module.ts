@@ -14,14 +14,12 @@ import * as Joi from '@hapi/joi';
 import { MulterModule } from '@nestjs/platform-express';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-// import { memoryStorage } from 'multer';
 import { TeamsModule } from './teams/teams.module';
 import { DatabaseModule } from './database.module';
-import { TeamSectionsModule } from './teamSections/teamSections.module';
 import { GamesModule } from './games/games.module';
 import { ScoresModule } from './scores/scores.module';
 import { EmailModule } from './email/email.module';
-import { TeamRequestsModule } from './teamRequests/teamRequests.module';
+import { TeamRequestsModule } from './team-requests/team-requests.module';
 
 const configValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
@@ -32,7 +30,6 @@ const configValidationSchema = Joi.object({
   POSTGRES_USER: Joi.string().required(),
   POSTGRES_PASSWORD: Joi.string().required(),
   POSTGRES_DB: Joi.string().required(),
-  // PORT: Joi.number(),
   JWT_SECRET: Joi.string().required(),
   JWT_EXPIRATION_TIME: Joi.number().required(),
   JWT_EMAIL_EXPIRATION_TIME: Joi.number().required(),
@@ -69,7 +66,6 @@ const configValidationSchema = Joi.object({
     EmailModule,
     UsersModule,
     TeamsModule,
-    TeamSectionsModule,
     ScoresModule,
     GamesModule,
     TeamRequestsModule,

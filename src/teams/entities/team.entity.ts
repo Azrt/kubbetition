@@ -1,5 +1,5 @@
 import { Common } from 'src/common/entities/CommonEntity';
-import { TeamRequest } from 'src/teamRequests/entities/team-request.entity';
+import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
   Column,

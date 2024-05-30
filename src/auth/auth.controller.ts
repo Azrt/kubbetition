@@ -13,6 +13,8 @@ import { AuthService } from './auth.service';
 import { GoogleOauthGuard } from './guards/google-oauth.guard';
 import { GoogleLoginDto } from './dto/login.dto';
 import { Public } from 'src/common/decorators/public.decorator';
+import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
+import { User } from 'src/users/entities/user.entity';
 
 @Controller("auth")
 export class AuthController {
@@ -60,5 +62,11 @@ export class AuthController {
     } catch (e) {
       res.status(HttpStatus.BAD_REQUEST).json(e);
     }
+  }
+
+  @Public()
+  @Get("me")
+  async currentUserData(@CurrentUser() user: User) {
+    return this.authService.getCurrentUser(user);
   }
 }

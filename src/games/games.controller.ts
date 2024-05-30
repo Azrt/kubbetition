@@ -7,6 +7,8 @@ import { Game } from './entities/game.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
+import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
+import { User } from 'src/users/entities/user.entity';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
@@ -15,8 +17,11 @@ export class GamesController {
 
   // TODO: Add user validation, prevent game with same user in different teams
   @Post()
-  create(@Body() createGameDto: CreateGameDto) {
-    return this.gamesService.create(createGameDto);
+  create(
+    @Body() createGameDto: CreateGameDto,
+    @CurrentUser() currentUser: User
+  ) {
+    return this.gamesService.create(createGameDto, currentUser);
   }
 
   @Get()

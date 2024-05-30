@@ -5,7 +5,6 @@ import { Score } from './entities/score.entity';
 import { Repository } from 'typeorm';
 import { SCORE_RELATIONS } from './scores.constants';
 import { User } from 'src/users/entities/user.entity';
-import { TeamSectionsService } from 'src/teamSections/teamSections.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ScoreReadyEvent } from './events/score-ready.event';
 import { SCORE_READY_EVENT } from './listeners/score-ready.listener';
@@ -17,7 +16,6 @@ export class ScoresService {
   constructor(
     @InjectRepository(Score)
     private scoresRepository: Repository<Score>,
-    private teamSectionsService: TeamSectionsService,
     private eventEmitter: EventEmitter2
   ) {}
   findAll() {

@@ -9,6 +9,7 @@ import { UsersService } from 'src/users/users.service';
 import { Auth, google } from 'googleapis';
 import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
 import { parseGoogleUserData } from './auth.helpers';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -104,5 +105,9 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async getCurrentUser(user?: User) {
+    return this.usersService.findOne(user?.id);
   }
 }
