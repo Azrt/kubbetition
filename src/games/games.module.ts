@@ -11,6 +11,8 @@ import { UniqueMembersRule } from './validation/unique-members.rule';
 import { UsersService } from 'src/users/users.service';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
+import { CreatedByUserRule } from './validation/created-by-user.rule';
+import { GameReadyRule } from './validation/game-ready.rule';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
@@ -22,6 +24,8 @@ import { Team } from 'src/teams/entities/team.entity';
     TeamMembersExistsRule,
     TeamMembersNumberRule,
     UniqueMembersRule,
+    CreatedByUserRule,
+    GameReadyRule,
   ],
 })
 export class GamesModule {}

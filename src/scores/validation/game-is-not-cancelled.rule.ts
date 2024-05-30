@@ -7,9 +7,9 @@ import {
 import { GamesService } from "src/games/games.service";
 import { ScoresService } from "../scores.service";
 
-@ValidatorConstraint({ async: true, name: "GameReady" })
+@ValidatorConstraint({ async: true, name: "GameNotCancelled" })
 @Injectable()
-export class GameReadyRule implements ValidatorConstraintInterface {
+export class GameNotCancelledRule implements ValidatorConstraintInterface {
   constructor(
     private gamesService: GamesService,
     private scoreService: ScoresService
@@ -19,10 +19,10 @@ export class GameReadyRule implements ValidatorConstraintInterface {
     const score = await this.scoreService.findOne(+id);
     const game = await this.gamesService.findOne(score?.gameId);
 
-    return game.scores.every(({ isReady }) => isReady);
+    return !game.isCancelled;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {
-    return "Cannot update score if game is not ready yet";
+    return "Cannot update cancelled game";
   }
 }

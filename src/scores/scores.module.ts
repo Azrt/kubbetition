@@ -6,23 +6,23 @@ import { Game } from 'src/games/entities/game.entity';
 import { Score } from './entities/score.entity';
 import { GamesService } from 'src/games/games.service';
 import { GameInProgressRule } from './validation/game-in-progress.rule';
-import { GameReadyRule } from './validation/game-ready.rule';
+import { GameScoreReadyRule } from "./validation/game-score-ready.rule";
 import { GameUserRule } from './validation/game-user.rule';
 import { ScoreReadyListener } from './listeners/score-ready.listener';
 import { ScoreUpdateListener } from './listeners/score-update.listener';
 import { User } from 'src/users/entities/user.entity';
+import { GameNotCancelledRule } from './validation/game-is-not-cancelled.rule';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Game, Score, User]),
-  ],
+  imports: [TypeOrmModule.forFeature([Game, Score, User])],
   controllers: [ScoresController],
   providers: [
     ScoresService,
     GamesService,
     GameInProgressRule,
-    GameReadyRule,
+    GameScoreReadyRule,
     GameUserRule,
+    GameNotCancelledRule,
     ScoreReadyListener,
     ScoreUpdateListener,
   ],

@@ -23,16 +23,10 @@ export class GameUserRule implements ValidatorConstraintInterface {
     if (isAdmin) return true;
 
     const score = await this.scoreService.findOne(+scoreId);
-    // const teamSections = await this.teamSectionsService.findByMembers([
-    //   user.id,
-    // ]);
 
     if (!score) return true;
-
-    // if (!score || !teamSections) return true
-
-    // return teamSections.some(({ team_section_id }) => team_section_id === score?.teamSectionId)
-    return true;
+    
+    return score.members.some(({ id }) => id === user?.id);
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {

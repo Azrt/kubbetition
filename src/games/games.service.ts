@@ -103,8 +103,8 @@ export class GamesService {
     });
   }
 
-  async findOneByScore(scoreId: number) {
-    return await this.gamesRepository.findOne({
+  findOneByScore(scoreId: number) {
+    return this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
       where: {
         scores: {
@@ -112,6 +112,15 @@ export class GamesService {
         },
       },
     });
+  }
+
+  cancelGame(id: number) {
+    const game = this.gamesRepository.create({
+      id,
+      isCancelled: true,
+    });
+  
+    return this.gamesRepository.save(game);
   }
 
   update(id: number, updateGameDto: UpdateGameDto) {

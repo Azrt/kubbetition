@@ -16,6 +16,9 @@ export class Game extends Common {
   @ManyToOne(() => User, (user) => user.games, { nullable: true })
   createdBy: User;
 
+  @Column({ type: "bool", default: false })
+  isCancelled: boolean;
+
   @Column({
     type: "enum",
     enum: GameType,

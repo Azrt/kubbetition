@@ -9,13 +9,15 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
+import { CancelGameDto } from './dto/cancel-game.dto';
+import { EndGameDto } from './dto/end-game.dto';
+import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
   constructor(private readonly gamesService: GamesService) {}
 
-  // TODO: Add user validation, prevent game with same user in different teams
   @Post()
   create(
     @Body() createGameDto: CreateGameDto,
@@ -29,24 +31,33 @@ export class GamesController {
     return this.gamesService.findAll(query);
   }
 
-  @Get(":id")
+  @Get(":gameId")
   @UseInterceptors(NotFoundInterceptor)
-  findOne(@Param("id") id: string) {
-    return this.gamesService.findOne(+id);
+  findOne(@Param("gameId") gameId: string) {
+    return this.gamesService.findOne(+gameId);
   }
 
-  @Patch(":id")
-  update(@Param("id") id: string, @Body() updateGameDto: UpdateGameDto) {
-    return this.gamesService.update(+id, updateGameDto);
+  @Patch(":gameId")
+  update(
+    @Param("igameIdd") gameId: string,
+    @Body() updateGameDto: UpdateGameDto
+  ) {
+    return this.gamesService.update(+gameId, updateGameDto);
   }
 
-  @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.gamesService.remove(+id);
+  @Delete(":gameId")
+  remove(@Param("gameId") gameId: string) {
+    return this.gamesService.remove(+gameId);
   }
 
-  @Patch(":id/end")
-  end(@Param("id") id: string) {
-    return this.gamesService.endGame(+id);
+  @Patch(":gameId/end")
+  end(@Param() params: EndGameDto) {
+    return this.gamesService.endGame(+params.gameId);
+  }
+
+  @UseInterceptors(ParamContextInterceptor)
+  @Post(":gameId/cancel")
+  cancel(@Param() params: CancelGameDto) {
+    return this.gamesService.cancelGame(+params.gameId);
   }
 }
