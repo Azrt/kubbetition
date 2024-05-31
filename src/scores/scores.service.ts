@@ -80,7 +80,6 @@ export class ScoresService {
 
   async joinScore(scoreId: number, user: User) {
     const score = await this.findOne(scoreId);
-  
     const scoreToUpdate = this.scoresRepository.create({
       id: scoreId,
       members: [...score.members, user],

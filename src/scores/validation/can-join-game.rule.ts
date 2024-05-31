@@ -22,6 +22,8 @@ export class CanJoinGameRule implements ValidatorConstraintInterface {
     const score = await this.scoreService.findOne(+id);
     const game = await this.gamesService.findOne(score?.gameId);
 
+    if (!score) return true;
+
     const gameHasMember = game.members.some(({ id }) => id === user?.id);
     const userAlreadyJoined = game.scores.some(({ members }) =>
       members.some(({ id }) => id === user?.id)

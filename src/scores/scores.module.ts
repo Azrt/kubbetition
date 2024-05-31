@@ -20,6 +20,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
+import { ScoreExistsRule } from './validation/score-exists.rule';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
@@ -39,6 +40,7 @@ import { Team } from 'src/teams/entities/team.entity';
     JwtService,
     UsersService,
     TeamsService,
+    ScoreExistsRule,
   ],
 })
 export class ScoresModule implements NestModule {

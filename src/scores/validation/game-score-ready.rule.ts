@@ -19,6 +19,8 @@ export class GameScoreReadyRule implements ValidatorConstraintInterface {
     const score = await this.scoreService.findOne(+id);
     const game = await this.gamesService.findOne(score?.gameId);
 
+    if (!score) return true;
+
     return game.isGameReady;
   }
 

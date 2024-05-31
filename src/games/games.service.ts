@@ -131,10 +131,8 @@ export class GamesService {
       relations: GAME_RELATIONS,
       where: {
         endTime: null,
-        scores: {
-          members: {
-            id: user?.id ?? 1,
-          },
+        members: {
+          id: user?.id,
         },
       },
     });
