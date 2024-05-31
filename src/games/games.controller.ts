@@ -31,6 +31,11 @@ export class GamesController {
     return this.gamesService.findAll(query);
   }
 
+  @Get("active")
+  findUserActive(@CurrentUser() currentUser: User) {
+    return this.gamesService.findAllUserActive(currentUser);
+  }
+
   @Get(":gameId")
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("gameId") gameId: string) {
@@ -39,7 +44,7 @@ export class GamesController {
 
   @Patch(":gameId")
   update(
-    @Param("igameIdd") gameId: string,
+    @Param("gameId") gameId: string,
     @Body() updateGameDto: UpdateGameDto
   ) {
     return this.gamesService.update(+gameId, updateGameDto);

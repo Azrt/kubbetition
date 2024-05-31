@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { EventEmitterModule } from '@nestjs/event-emitter'
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GoogleStrategy } from './google.strategy';
 import { DataSource } from 'typeorm';
 
@@ -20,6 +20,8 @@ import { GamesModule } from './games/games.module';
 import { ScoresModule } from './scores/scores.module';
 import { EmailModule } from './email/email.module';
 import { TeamRequestsModule } from './team-requests/team-requests.module';
+import { JwtMiddleware } from './auth/middleware/jwt.middleware';
+import { JwtModule } from '@nestjs/jwt';
 
 const configValidationSchema = Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
@@ -60,6 +62,16 @@ const configValidationSchema = Joi.object({
     }),
     DevtoolsModule.register({
       http: process.env.NODE_ENV !== "production",
+    }),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get("JWT_SECRET"),
+        signOptions: {
+          expiresIn: `${configService.get("JWT_EXPIRATION_TIME")}s`,
+        },
+      }),
     }),
     DatabaseModule,
     AuthModule,

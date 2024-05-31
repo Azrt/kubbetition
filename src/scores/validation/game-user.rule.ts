@@ -4,7 +4,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from "class-validator";
-import { isAdminRole, isUserRole } from "src/common/helpers/user";
+import { isAdminRole } from "src/common/helpers/user";
 import { ScoresService } from "../scores.service";
 
 @ValidatorConstraint({ async: true, name: "GameUser" })

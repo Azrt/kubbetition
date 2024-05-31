@@ -1,9 +1,10 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsDefined, IsEnum, IsInt, Max, Min, Validate } from "class-validator";
+import { IsDefined, IsEnum, IsInt, IsOptional, Max, Min, Validate } from "class-validator";
 import { GameType } from "src/common/enums/gameType";
 import { TeamMembersNumberRule } from "../validation/team-members-number.rule";
 import { TeamMembersExistsRule } from "../validation/team-members-exists.rule";
 import { UniqueMembersRule } from "../validation/unique-members.rule";
+import { GameParticipantsNumberRule } from "../validation/game-participants-number.rule";
 
 export class CreateGameDto {
   @ApiProperty({ readOnly: true })
@@ -13,16 +14,21 @@ export class CreateGameDto {
   @IsEnum(GameType)
   type: GameType;
 
-  @IsDefined()
+  @IsOptional()
   @Validate(TeamMembersNumberRule)
   @Validate(TeamMembersExistsRule)
-  firstTeam: Array<number>;
+  firstTeam?: Array<number>;
 
-  @IsDefined()
+  @IsOptional()
   @Validate(TeamMembersNumberRule)
   @Validate(TeamMembersExistsRule)
   @Validate(UniqueMembersRule)
-  secondTeam: Array<number>;
+  secondTeam?: Array<number>;
+
+  @IsDefined()
+  @Validate(TeamMembersExistsRule)
+  @Validate(GameParticipantsNumberRule)
+  participants: Array<number>;
 
   @IsDefined()
   @Min(5)

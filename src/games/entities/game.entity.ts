@@ -3,7 +3,7 @@ import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
 import { Score } from "src/scores/entities/score.entity";
 import { User } from "src/users/entities/user.entity";
-import { AfterLoad, Column, Entity, JoinColumn, ManyToOne, OneToMany } from "typeorm";
+import { AfterLoad, Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany } from "typeorm";
 
 @Entity()
 export class Game extends Common {
@@ -13,11 +13,27 @@ export class Game extends Common {
   @Column({ type: "timestamptz", nullable: true })
   endTime: Date | null;
 
-  @ManyToOne(() => User, (user) => user.games, { nullable: true })
+  @ManyToOne(() => User, (user) => user.createdGames, { nullable: true })
   createdBy: User;
 
   @Column({ type: "bool", default: false })
   isCancelled: boolean;
+
+  @ManyToMany(() => User, {
+    cascade: true,
+  })
+  @JoinTable({
+    name: "game_participants",
+    joinColumn: {
+      name: "game_id",
+      referencedColumnName: "id",
+    },
+    inverseJoinColumn: {
+      name: "member_id",
+      referencedColumnName: "id",
+    },
+  })
+  members: Array<User>;
 
   @Column({
     type: "enum",

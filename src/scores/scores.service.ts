@@ -77,4 +77,17 @@ export class ScoresService {
 
     return score;
   }
+
+  async joinScore(scoreId: number, user: User) {
+    const score = await this.findOne(scoreId);
+  
+    const scoreToUpdate = this.scoresRepository.create({
+      id: scoreId,
+      members: [...score.members, user],
+    });
+
+    const updatedScore = await this.scoresRepository.save(scoreToUpdate);
+
+    return updatedScore;
+  }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,6 +13,10 @@ import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
 import { CreatedByUserRule } from './validation/created-by-user.rule';
 import { GameReadyRule } from './validation/game-ready.rule';
+import { GameParticipantsNumberRule } from './validation/game-participants-number.rule';
+import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
+import { JwtService } from '@nestjs/jwt';
+import { AuthService } from 'src/auth/auth.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
@@ -26,6 +30,13 @@ import { GameReadyRule } from './validation/game-ready.rule';
     UniqueMembersRule,
     CreatedByUserRule,
     GameReadyRule,
+    GameParticipantsNumberRule,
+    JwtService,
+    AuthService,
   ],
 })
-export class GamesModule {}
+export class GamesModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(JwtMiddleware).forRoutes("*");
+  }
+}

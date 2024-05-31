@@ -6,6 +6,7 @@ export const GAME_RELATIONS = [
   "scores",
   "scores.members",
   "scores.members.team",
+  "members",
 ];
 
 export const GAMES_PAGINATION_CONFIG: PaginateConfig<Game> = {

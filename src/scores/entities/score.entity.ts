@@ -1,7 +1,7 @@
 import { Common } from "src/common/entities/CommonEntity";
 import { Game } from "src/games/entities/game.entity";
 import { User } from "src/users/entities/user.entity";
-import { Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne } from "typeorm";
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from "typeorm";
 
 @Entity()
 export class Score extends Common {
@@ -23,17 +23,6 @@ export class Score extends Common {
     },
   })
   members: Array<User>;
-
-  // @ManyToOne(() => TeamSection, (section) => section.scores, {
-  //   onDelete: "SET NULL",
-  //   onUpdate: "NO ACTION",
-  //   nullable: true,
-  // })
-  // @JoinColumn()
-  // teamSection: TeamSection;
-
-  // @Column({ default: null })
-  // teamSectionId: number;
 
   @ManyToOne(() => Game, (game) => game.scores, {
     cascade: true,

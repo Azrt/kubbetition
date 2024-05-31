@@ -13,7 +13,6 @@ export class ScoreReadyListener {
 
   @OnEvent('score.ready', { async: true })
   async handleScoreReadyEvent(event: ScoreReadyEvent) {
-    console.log('readysdsdsd')
     const game = await this.gameService.findOne(event.gameId)
 
     if (game.isGameReady) {

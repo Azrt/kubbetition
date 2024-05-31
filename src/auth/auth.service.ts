@@ -7,7 +7,6 @@ import { JwtService } from '@nestjs/jwt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UsersService } from 'src/users/users.service';
 import { Auth, google } from 'googleapis';
-import { EmailConfirmationService } from 'src/email/emailConfirmation.service';
 import { parseGoogleUserData } from './auth.helpers';
 import { User } from 'src/users/entities/user.entity';
 
@@ -20,7 +19,6 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
-    private readonly emailConfirmationService: EmailConfirmationService
   ) {
     this.clientId = this.configService.get("GOOGLE_CLIENT_ID");
     this.clientSecret = this.configService.get("GOOGLE_SECRET");

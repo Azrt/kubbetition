@@ -28,31 +28,26 @@ export class GamesService {
     await queryRunner.startTransaction();
 
     try {
-      const { firstTeam, secondTeam, ...data } = createGameDto;
+      const { firstTeam, secondTeam, participants, ...data } = createGameDto;
+
+      const members = participants.map((id) => this.usersRepository.create({ id }));
 
       const gameData = await this.gamesRepository.create({
         ...data,
         createdBy: currentUser,
+        members,
       });
 
       const game = await queryRunner.manager.save(gameData);
 
-      const firstTeamMembers = firstTeam.map((id) =>
-        this.usersRepository.create({ id })
-      );
-
-      const secondTeamMembers = secondTeam.map((id) =>
-        this.usersRepository.create({ id })
-      );
-
       const firstTeamScoreData = this.scoresRepository.create({
-        members: firstTeamMembers,
+        members: [],
         score: null,
         game,
       });
 
       const secondTeamScoreData = this.scoresRepository.create({
-        members: secondTeamMembers,
+        members: [],
         score: null,
         game,
       });
@@ -129,5 +124,19 @@ export class GamesService {
 
   remove(id: number) {
     return `This action removes a #${id} game`;
+  }
+
+  findAllUserActive(user: User) {
+    return this.gamesRepository.find({
+      relations: GAME_RELATIONS,
+      where: {
+        endTime: null,
+        scores: {
+          members: {
+            id: user?.id ?? 1,
+          },
+        },
+      },
+    });
   }
 }

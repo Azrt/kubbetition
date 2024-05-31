@@ -9,6 +9,7 @@ import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { UpdateScoreParamsDto } from "./dto/update-score-params.dto";
 import { ScoreReadyParamsDto } from "./dto/score-ready-params.dto";
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
+import { JoinScoreParams } from './dto/join-score-params.dto';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("scores")
@@ -49,5 +50,11 @@ export class ScoresController {
     @CurrentUser() user: User
   ) {
     return this.scoresService.setReadyState(+params.scoreId, user);
+  }
+
+  @Post(":scoreId/join")
+  @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
+  joinScore(@Param() params: JoinScoreParams, @CurrentUser() user: User) {
+    return this.scoresService.joinScore(+params.scoreId, user);
   }
 }

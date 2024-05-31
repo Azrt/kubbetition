@@ -34,13 +34,6 @@ async function bootstrap() {
         in: "header",
       },
       SWAGGER_BEARER_TOKEN
-      // {
-      //   type: 'http',
-      //   scheme: 'Bearer',
-      //   bearerFormat: 'Bearer',
-      //   name: 'Authorization',
-      //   in: 'Header',
-      // },
     )
     .build();
 

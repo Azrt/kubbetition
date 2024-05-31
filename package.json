@@ -39,6 +39,7 @@
     "class-validator": "^0.14.1",
     "google-auth-library": "^9.4.2",
     "googleapis": "^131.0.0",
+    "jsonwebtoken": "^9.0.2",
     "nestjs-paginate": "^8.6.2",
     "nodemailer": "^6.9.13",
     "passport": "^0.7.0",
