@@ -11,7 +11,6 @@ import { ScoresService } from "../scores.service";
 @Injectable()
 export class GameMembersNumberRule implements ValidatorConstraintInterface {
   constructor(
-    private gamesService: GamesService,
     private scoreService: ScoresService
   ) {}
 

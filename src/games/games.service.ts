@@ -42,13 +42,13 @@ export class GamesService {
 
       const firstTeamScoreData = this.scoresRepository.create({
         members: [],
-        score: null,
+        value: null,
         game,
       });
 
       const secondTeamScoreData = this.scoresRepository.create({
         members: [],
-        score: null,
+        value: null,
         game,
       });
 

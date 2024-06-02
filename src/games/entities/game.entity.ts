@@ -66,7 +66,7 @@ export class Game extends Common {
     if (this.endTime) {
       const winningScore = this.scores?.reduce<Score | null>(
         (accumulator, current) => {
-          if (current.score && current.score > (accumulator?.score ?? 0)) {
+          if (current.value && current.value > (accumulator?.value ?? 0)) {
             return current;
           }
 

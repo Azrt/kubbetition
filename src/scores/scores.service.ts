@@ -10,12 +10,14 @@ import { ScoreReadyEvent } from './events/score-ready.event';
 import { SCORE_READY_EVENT } from './listeners/score-ready.listener';
 import { SCORE_UPDATE_EVENT } from './listeners/score-update.listener';
 import { ScoreUpdateEvent } from './events/score-update.event';
+import { GamesService } from 'src/games/games.service';
 
 @Injectable()
 export class ScoresService {
   constructor(
     @InjectRepository(Score)
     private scoresRepository: Repository<Score>,
+    private gamesService: GamesService,
     private eventEmitter: EventEmitter2
   ) {}
   findAll() {
@@ -47,7 +49,7 @@ export class ScoresService {
   async update(scoreId: number, updateScoreDto: UpdateScoreDto, user: User) {
     const scoreToUpdate = this.scoresRepository.create({
       id: scoreId,
-      ...updateScoreDto,
+      value: updateScoreDto.score,
     });
 
     await this.scoresRepository.save(scoreToUpdate);
@@ -70,12 +72,13 @@ export class ScoresService {
     await this.scoresRepository.save(scoreToUpdate);
 
     const score = await this.findOne(scoreId);
+    const updatedGame = await this.gamesService.findOne(score.gameId);
 
     const scoreReadyEvent = new ScoreReadyEvent(score.gameId);
 
     this.eventEmitter.emit(SCORE_READY_EVENT, scoreReadyEvent);
 
-    return score;
+    return updatedGame;
   }
 
   async joinScore(scoreId: number, user: User) {
@@ -85,8 +88,10 @@ export class ScoresService {
       members: [...score.members, user],
     });
 
-    const updatedScore = await this.scoresRepository.save(scoreToUpdate);
+    await this.scoresRepository.save(scoreToUpdate);
 
-    return updatedScore;
+    const updatedGame = await this.gamesService.findOne(score.gameId);
+
+    return updatedGame;
   }
 }

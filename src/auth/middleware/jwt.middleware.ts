@@ -14,7 +14,7 @@ export class JwtMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     if (!req.headers.authorization) {
-      next();
+      return next();
     } else {
       const token = req.headers.authorization.replace("Bearer", "").trim();
 
@@ -26,8 +26,10 @@ export class JwtMiddleware implements NestMiddleware {
         const user = await this.authService.findUserByEmail(verify.email);
 
         if (user) {
-          req.body.user = user;
+          req.user = user;
         }
+      } else {
+        req.user = null;
       }
     }
     next();

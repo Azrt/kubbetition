@@ -13,7 +13,7 @@ export class ScoreUpdateListener {
   async handleScoreUpdateEvent(event: ScoreUpdateEvent) {
     const game = await this.gameService.findOne(event.gameId);
 
-    if (game.scores.every(({ score }) => typeof score === 'number')) {
+    if (game.scores.every(({ value }) => typeof value === "number")) {
       await this.gameService.endGame(event.gameId);
     }
   }

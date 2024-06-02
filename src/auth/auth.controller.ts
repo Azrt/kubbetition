@@ -64,7 +64,7 @@ export class AuthController {
     }
   }
 
-  @Public()
+  
   @Get("me")
   async currentUserData(@CurrentUser() user: User) {
     return this.authService.getCurrentUser(user);

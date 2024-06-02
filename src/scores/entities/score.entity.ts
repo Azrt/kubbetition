@@ -6,7 +6,7 @@ import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from "typeorm";
 @Entity()
 export class Score extends Common {
   @Column({ type: "int", nullable: true })
-  score: number | null;
+  value: number | null;
 
   @ManyToMany(() => User, {
     cascade: true,
