@@ -55,12 +55,13 @@ export class ScoresService {
     await this.scoresRepository.save(scoreToUpdate);
 
     const score = await this.findOne(scoreId);
+    const updatedGame = await this.gamesService.findOne(score.gameId);
 
     const scoreUpdateEvent = new ScoreUpdateEvent(score.gameId);
 
     this.eventEmitter.emit(SCORE_UPDATE_EVENT, scoreUpdateEvent);
 
-    return score;
+    return updatedGame;
   }
 
   async setReadyState(scoreId: number, user: User) {

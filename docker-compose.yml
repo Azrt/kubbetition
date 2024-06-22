@@ -4,15 +4,13 @@ services:
   db:
     image: postgres
     restart: always
-    environment:
-      - POSTGRES_PASSWORD=postgres
+    env_file:
+      - .env
     container_name: kubbetition-postgres
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     ports:
       - '5432:5432'
-    # networks:
-    #   - db
 
   app:
     build:
@@ -25,17 +23,41 @@ services:
       - '3000:3000'
     depends_on:
       - db
+      - redis
     volumes:
       - ./src:/app/src
+      # - ./src:/app/node_modules
 
   pgadmin:
     image: dpage/pgadmin4
     restart: always
     container_name: kubbetition-pgadmin
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
-      - PGADMIN_DEFAULT_PASSWORD=pgadmin4
+    env_file:
+      - .env
     ports:
       - '5050:80'
     depends_on:
       - db
+
+  redis:
+    image: redis
+    container_name: kubbetition-redis
+    command: /bin/sh -c "redis-server --requirepass $$REDIS_PASS"
+    env_file:
+      - .env
+    ports:
+      - '6379:6379'
+    volumes:
+      - ./redis/data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: kubbetition-rabbitmq
+    hostname: rabbitmq
+    env_file:
+      - .env
+    volumes:
+      - /var/lib/rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'

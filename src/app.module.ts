@@ -15,7 +15,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { TeamsModule } from './teams/teams.module';
-import { DatabaseModule } from './database.module';
+import { DatabaseModule } from './common/modules/database.module';
 import { GamesModule } from './games/games.module';
 import { ScoresModule } from './scores/scores.module';
 import { EmailModule } from './email/email.module';
@@ -41,6 +41,12 @@ const configValidationSchema = Joi.object({
   EMAIL_CONFIRMATION_URL: Joi.string().required(),
   EMAIL_PORT: Joi.string().required(),
   EMAIL_HOST: Joi.string().required(),
+  REDIS_PASS: Joi.string().required(),
+  REDIS_URI: Joi.string().required(),
+  RABBITMQ_DEFAULT_USER: Joi.string().required(),
+  RABBITMQ_DEFAULT_PASS: Joi.string().required(),
+  RABBITMQ_USER: Joi.string().required(),
+  RABBITMQ_PASS: Joi.string().required(),
 });
 
 @Module({
