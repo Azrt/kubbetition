@@ -3,7 +3,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { Score } from 'src/scores/entities/score.entity';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
@@ -67,22 +67,30 @@ export class GamesService {
     }
   }
 
-  endGame(id: number) {
+  async endGame(id: number) {
     const game = this.gamesRepository.create({
       id,
       endTime: new Date().toISOString(),
     });
 
-    return this.gamesRepository.save(game);
+    await this.gamesRepository.save(game);
+
+    const updatedGame = await this.findOne(id);
+
+    return updatedGame;
   }
 
-  startGame(id: number) {
+  async startGame(id: number) {
     const game = this.gamesRepository.create({
       id,
       startTime: new Date().toISOString(),
     });
 
-    return this.gamesRepository.save(game);
+    await this.gamesRepository.save(game);
+
+    const updatedGame = await this.findOne(id);
+
+    return updatedGame;
   }
 
   findAll(query?: PaginateQuery) {
@@ -130,7 +138,7 @@ export class GamesService {
     return this.gamesRepository.find({
       relations: GAME_RELATIONS,
       where: {
-        endTime: null,
+        endTime: IsNull(),
         members: {
           id: user?.id,
         },
