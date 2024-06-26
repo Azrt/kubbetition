@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { In, Repository } from 'typeorm';
 import { TeamsService } from 'src/teams/teams.service';
+import { UpdateUserTokenDto } from './dto/update-user-token.dto';
 
 @Injectable()
 export class UsersService {
@@ -68,5 +69,14 @@ export class UsersService {
 
   remove(id: number) {
     return this.usersRepository.delete({ id });
+  }
+
+  async updateCurrentUserToken(id: number, params: UpdateUserTokenDto) {
+    const userToUpdate = this.usersRepository.create({
+      id: Number(id),
+      mobileToken: params.token,
+    });
+
+    return this.usersRepository.save(userToUpdate);
   }
 }

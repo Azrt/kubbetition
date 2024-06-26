@@ -38,6 +38,9 @@ export class User {
   @Column({ nullable: true, length: 450 })
   image: string;
 
+  @Column({ length: 1000, nullable: true })
+  mobileToken: string;
+
   @ManyToOne(() => Team, (team) => team.members, {
     cascade: true,
     nullable: true,
