@@ -77,6 +77,10 @@ export class UsersService {
       mobileToken: params.token,
     });
 
-    return this.usersRepository.save(userToUpdate);
+    await this.usersRepository.save(userToUpdate);
+
+    const updatedUser = this.findOne(id);
+
+    return updatedUser;
   }
 }
