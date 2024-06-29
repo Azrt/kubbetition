@@ -1,3 +1,4 @@
+import { Exclude } from 'class-transformer';
 import { Role } from 'src/common/enums/role.enum';
 import { Game } from 'src/games/entities/game.entity';
 import { Score } from 'src/scores/entities/score.entity';
@@ -39,6 +40,7 @@ export class User {
   image: string;
 
   @Column({ length: 1000, nullable: true })
+  @Exclude({ toPlainOnly: true })
   mobileToken: string;
 
   @ManyToOne(() => Team, (team) => team.members, {
@@ -66,4 +68,8 @@ export class User {
 
   @OneToMany(() => Score, (game) => game.members)
   scores: Array<Score>;
+
+  constructor(entity: Partial<User>) {
+    Object.assign(this, entity);
+  }
 }

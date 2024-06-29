@@ -1,8 +1,8 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from './app.constants';
-import { ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { useContainer } from 'class-validator';
 
 async function bootstrap() {
@@ -21,6 +21,10 @@ async function bootstrap() {
       transform: true,
     })
   );
+
+  app.useGlobalInterceptors(
+    new ClassSerializerInterceptor(app.get(Reflector))
+  )
 
   const config = new DocumentBuilder()
     .setTitle("Kubbetition")
@@ -43,11 +47,6 @@ async function bootstrap() {
       persistAuthorization: true,
     },
   });
-  // app.stat
-  // app.useStaticAssets(join(__dirname, '..', 'public'), {
-  //   index: false,
-  //   prefix: '/public',
-  // });
 
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
 

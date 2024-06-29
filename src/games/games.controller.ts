@@ -12,18 +12,33 @@ import { User } from 'src/users/entities/user.entity';
 import { CancelGameDto } from './dto/cancel-game.dto';
 import { EndGameDto } from './dto/end-game.dto';
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
+import { NotificationsService } from 'src/common/services/notifications.service';
+import { UsersService } from 'src/users/users.service';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
-  constructor(private readonly gamesService: GamesService) {}
+  constructor(
+    private readonly gamesService: GamesService,
+    private readonly notificationsService: NotificationsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post()
-  create(
+  async create(
     @Body() createGameDto: CreateGameDto,
     @CurrentUser() currentUser: User
   ) {
-    return this.gamesService.create(createGameDto, currentUser);
+    const tokens = await this.usersService.getMobileTokens(createGameDto.participants);
+
+    const tokensArray = tokens.map(({ token }) => token)
+
+    const game = await this.gamesService.create(createGameDto, currentUser);
+    const title = 'New game has been created!'
+    const body = `${game.createdBy.firstName} ${game.createdBy.lastName} started a new game`
+    await this.notificationsService.sendToUsers(tokensArray, title, body);
+
+    return game;
   }
 
   @Get()

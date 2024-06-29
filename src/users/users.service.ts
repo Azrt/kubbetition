@@ -6,6 +6,7 @@ import { User } from './entities/user.entity';
 import { In, Repository } from 'typeorm';
 import { TeamsService } from 'src/teams/teams.service';
 import { UpdateUserTokenDto } from './dto/update-user-token.dto';
+import { MobileTokenResponse } from './types/mobile-token-response.type';
 
 @Injectable()
 export class UsersService {
@@ -41,6 +42,14 @@ export class UsersService {
         }),
       },
     });
+  }
+
+  getMobileTokens(ids: Array<number>): Promise<Array<MobileTokenResponse>> {
+    return this.usersRepository
+      .createQueryBuilder("user")
+      .select(["user.id AS id", "user.mobileToken AS token"])
+      .where("user.id IN (:...ids)", { ids })
+      .getRawMany();
   }
 
   uploadImage(id: number, image: string) {
