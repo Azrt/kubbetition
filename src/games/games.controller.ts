@@ -57,19 +57,6 @@ export class GamesController {
     return this.gamesService.findOne(+gameId);
   }
 
-  @Patch(":gameId")
-  update(
-    @Param("gameId") gameId: string,
-    @Body() updateGameDto: UpdateGameDto
-  ) {
-    return this.gamesService.update(+gameId, updateGameDto);
-  }
-
-  @Delete(":gameId")
-  remove(@Param("gameId") gameId: string) {
-    return this.gamesService.remove(+gameId);
-  }
-
   @Patch(":gameId/end")
   end(@Param() params: EndGameDto) {
     return this.gamesService.endGame(+params.gameId);

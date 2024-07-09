@@ -22,6 +22,7 @@ import { TeamRequestsModule } from './team-requests/team-requests.module';
 import { JwtModule } from '@nestjs/jwt';
 import { configValidationSchema } from './app.config-schema';
 import { FirebaseModule } from './common/modules/firebase.module';
+import { RedisModule } from './common/modules/redis.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { FirebaseModule } from './common/modules/firebase.module';
     }),
     DatabaseModule,
     FirebaseModule,
+    RedisModule,
     AuthModule,
     EmailModule,
     UsersModule,
