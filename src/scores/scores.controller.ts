@@ -10,11 +10,15 @@ import { UpdateScoreParamsDto } from "./dto/update-score-params.dto";
 import { ScoreReadyParamsDto } from "./dto/score-ready-params.dto";
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
 import { JoinScoreParams } from './dto/join-score-params.dto';
+import { GamesGateway } from 'src/games/games.gateway';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("scores")
 export class ScoresController {
-  constructor(private readonly scoresService: ScoresService) {}
+  constructor(
+    private readonly scoresService: ScoresService,
+    private readonly gamesGateway: GamesGateway,
+  ) {}
 
   @Get()
   findAll() {
@@ -35,26 +39,42 @@ export class ScoresController {
 
   @Patch(":scoreId")
   @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
-  update(
+  async update(
     @Param() params: UpdateScoreParamsDto,
     @Body() updateScoreDto: UpdateScoreDto,
     @CurrentUser() user: User
   ) {
-    return this.scoresService.update(+params.scoreId, updateScoreDto, user);
+    const game = await this.scoresService.update(
+      +params.scoreId,
+      updateScoreDto,
+      user
+    );
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 
   @Post(":scoreId/ready")
   @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
-  setReadyState(
+  async setReadyState(
     @Param() params: ScoreReadyParamsDto,
     @CurrentUser() user: User
   ) {
-    return this.scoresService.setReadyState(+params.scoreId, user);
+    const game = await this.scoresService.setReadyState(+params.scoreId, user);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 
   @Post(":scoreId/join")
   @UseInterceptors(NotFoundInterceptor, ParamContextInterceptor)
-  joinScore(@Param() params: JoinScoreParams, @CurrentUser() user: User) {
-    return this.scoresService.joinScore(+params.scoreId, user);
+  async joinScore(@Param() params: JoinScoreParams, @CurrentUser() user: User) {
+    const game = await this.scoresService.joinScore(+params.scoreId, user);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 }

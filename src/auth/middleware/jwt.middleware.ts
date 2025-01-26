@@ -18,17 +18,21 @@ export class JwtMiddleware implements NestMiddleware {
     } else {
       const token = req.headers.authorization.replace("Bearer", "").trim();
 
-      const verify = this.jwtService.verify(token, {
-        secret: this.configService.get("JWT_SECRET"),
-      });
-
-      if (verify?.email) {
-        const user = await this.authService.findUserByEmail(verify.email);
-
-        if (user) {
-          req.user = user;
+      try {
+        const verify = this.jwtService.verify(token, {
+          secret: this.configService.get("JWT_SECRET"),
+        });
+  
+        if (verify?.email) {
+          const user = await this.authService.findUserByEmail(verify.email);
+  
+          if (user) {
+            req.user = user;
+          }
+        } else {
+          req.user = null;
         }
-      } else {
+      } catch (e) {
         req.user = null;
       }
     }

@@ -17,6 +17,7 @@ import { GameParticipantsNumberRule } from './validation/game-participants-numbe
 import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from 'src/auth/auth.service';
+import { GamesGateway } from './games.gateway';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
@@ -33,6 +34,7 @@ import { AuthService } from 'src/auth/auth.service';
     GameParticipantsNumberRule,
     JwtService,
     AuthService,
+    GamesGateway,
   ],
 })
 export class GamesModule implements NestModule {

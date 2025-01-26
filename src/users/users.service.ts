@@ -23,7 +23,12 @@ export class UsersService {
   }
 
   findOne(id: number) {
-    return this.usersRepository.findOneBy({ id });
+    return this.usersRepository.findOne({
+      where: { 
+        id,
+      },
+      relations: ['team'],
+    });
   }
 
   findOneByEmail(email: string) {

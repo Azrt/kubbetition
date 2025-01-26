@@ -11,6 +11,7 @@ import { SCORE_READY_EVENT } from './listeners/score-ready.listener';
 import { SCORE_UPDATE_EVENT } from './listeners/score-update.listener';
 import { ScoreUpdateEvent } from './events/score-update.event';
 import { GamesService } from 'src/games/games.service';
+import { Game } from 'src/games/entities/game.entity';
 
 @Injectable()
 export class ScoresService {
@@ -66,7 +67,7 @@ export class ScoresService {
 
     this.eventEmitter.emit(SCORE_UPDATE_EVENT, scoreUpdateEvent);
 
-    return endedGame ?? updatedGame;
+    return (endedGame as Game) ?? updatedGame;
   }
 
   async setReadyState(scoreId: number, user: User) {

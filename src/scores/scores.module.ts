@@ -21,6 +21,7 @@ import { UsersService } from 'src/users/users.service';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
 import { ScoreExistsRule } from './validation/score-exists.rule';
+import { GamesGateway } from 'src/games/games.gateway';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
@@ -41,6 +42,7 @@ import { ScoreExistsRule } from './validation/score-exists.rule';
     UsersService,
     TeamsService,
     ScoreExistsRule,
+    GamesGateway,
   ],
 })
 export class ScoresModule implements NestModule {

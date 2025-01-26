@@ -12,22 +12,35 @@ import { User } from 'src/users/entities/user.entity';
 import { CancelGameDto } from './dto/cancel-game.dto';
 import { EndGameDto } from './dto/end-game.dto';
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
+import { GamesGateway } from './games.gateway';
+import { ConnectedSocket } from '@nestjs/websockets';
+import { Socket } from 'socket.io';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
-  constructor(private readonly gamesService: GamesService) {}
+  constructor(
+    private readonly gamesService: GamesService,
+    private readonly gamesGateway: GamesGateway
+  ) {}
 
   @Post()
-  create(
+  async create(
     @Body() createGameDto: CreateGameDto,
-    @CurrentUser() currentUser: User
+    @CurrentUser() currentUser: User,
+    @ConnectedSocket() socket: Socket
   ) {
-    return this.gamesService.create(createGameDto, currentUser);
+    const game = await this.gamesService.create(createGameDto, currentUser);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 
   @Get()
-  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Game>> {
+  async findAll(
+    @Paginate() query: PaginateQuery,
+  ): Promise<Paginated<Game>> {
     return this.gamesService.findAll(query);
   }
 
@@ -43,11 +56,15 @@ export class GamesController {
   }
 
   @Patch(":gameId")
-  update(
+  async update(
     @Param("gameId") gameId: string,
     @Body() updateGameDto: UpdateGameDto
   ) {
-    return this.gamesService.update(+gameId, updateGameDto);
+    const game = await this.gamesService.update(+gameId, updateGameDto);
+  
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 
   @Delete(":gameId")
@@ -56,13 +73,20 @@ export class GamesController {
   }
 
   @Patch(":gameId/end")
-  end(@Param() params: EndGameDto) {
-    return this.gamesService.endGame(+params.gameId);
+  async end(@Param() params: EndGameDto) {
+    const game = await this.gamesService.endGame(+params.gameId);
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game
   }
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/cancel")
-  cancel(@Param() params: CancelGameDto) {
-    return this.gamesService.cancelGame(+params.gameId);
+  async cancel(@Param() params: CancelGameDto) {
+    const game = await this.gamesService.cancelGame(+params.gameId);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
   }
 }
