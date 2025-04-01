@@ -6,6 +6,7 @@ COPY package*.json ./
 
 RUN yarn
 RUN yarn add sharp --ignore-engines
+RUN mkdir -p ./uploads
 
 COPY . .
 
