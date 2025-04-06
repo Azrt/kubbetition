@@ -15,13 +15,17 @@ import { ParamContextInterceptor } from 'src/common/interceptors/param-context-i
 import { GamesGateway } from './games.gateway';
 import { ConnectedSocket } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
+import { NotificationsService } from 'src/common/services/notifications.service';
+import { UsersService } from 'src/users/users.service';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
   constructor(
     private readonly gamesService: GamesService,
-    private readonly gamesGateway: GamesGateway
+    private readonly gamesGateway: GamesGateway,
+    private readonly notificationsService: NotificationsService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Post()
@@ -30,8 +34,15 @@ export class GamesController {
     @CurrentUser() currentUser: User,
     @ConnectedSocket() socket: Socket
   ) {
-    const game = await this.gamesService.create(createGameDto, currentUser);
+    const tokens = await this.usersService.getMobileTokens(createGameDto.participants);
 
+    const tokensArray = tokens.map(({ token }) => token)
+
+    const game = await this.gamesService.create(createGameDto, currentUser);
+  
+    const title = 'New game has been created!'
+    const body = `${game.createdBy.firstName} ${game.createdBy.lastName} started a new game`
+    await this.notificationsService.sendToUsers(tokensArray, title, body);
     await this.gamesGateway.sendGameDataToClients(game);
 
     return game;

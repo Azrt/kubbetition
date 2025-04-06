@@ -8,9 +8,10 @@ import { Score } from 'src/scores/entities/score.entity';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
+import { GamesServiceInterface } from './interfaces/games.service.interface';
 
 @Injectable()
-export class GamesService {
+export class GamesService implements GamesServiceInterface {
   constructor(
     @InjectRepository(Game)
     private gamesRepository: Repository<Game>,
@@ -18,7 +19,7 @@ export class GamesService {
     private scoresRepository: Repository<Score>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private dataSource: DataSource
+    private dataSource: DataSource,
   ) {}
   async create(createGameDto: CreateGameDto, currentUser: User) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -30,7 +31,9 @@ export class GamesService {
     try {
       const { firstTeam, secondTeam, participants, ...data } = createGameDto;
 
-      const members = participants.map((id) => this.usersRepository.create({ id }));
+      const members = participants.map((id) =>
+        this.usersRepository.create({ id })
+      );
 
       const gameData = await this.gamesRepository.create({
         ...data,

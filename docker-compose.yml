@@ -47,7 +47,6 @@ services:
 
   redis:
     image: redis
-    container_name: kubbetition-redis
     command: /bin/sh -c "redis-server --requirepass $$REDIS_PASS"
     networks:
       - mainnet

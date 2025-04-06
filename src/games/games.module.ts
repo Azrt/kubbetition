@@ -18,9 +18,13 @@ import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from 'src/auth/auth.service';
 import { GamesGateway } from './games.gateway';
+import { FirebaseModule } from 'src/common/modules/firebase.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Game, Score, User, Team])],
+  imports: [
+    FirebaseModule,
+    TypeOrmModule.forFeature([Game, Score, User, Team])
+  ],
   controllers: [GamesController],
   providers: [
     GamesService,
