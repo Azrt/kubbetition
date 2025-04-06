@@ -56,7 +56,7 @@ import { RedisModule } from './common/modules/redis.module';
     }),
     DatabaseModule,
     FirebaseModule,
-    RedisModule,
+    // RedisModule,
     AuthModule,
     EmailModule,
     UsersModule,
