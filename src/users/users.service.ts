@@ -5,6 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { In, Repository } from 'typeorm';
 import { TeamsService } from 'src/teams/teams.service';
+import { UpdateUserTokenDto } from './dto/update-user-token.dto';
+import { MobileTokenResponse } from './types/mobile-token-response.type';
 
 @Injectable()
 export class UsersService {
@@ -42,6 +44,14 @@ export class UsersService {
     });
   }
 
+  getMobileTokens(ids: Array<number>): Promise<Array<MobileTokenResponse>> {
+    return this.usersRepository
+      .createQueryBuilder("user")
+      .select(["user.id AS id", "user.mobileToken AS token"])
+      .where("user.id IN (:...ids)", { ids })
+      .getRawMany();
+  }
+
   uploadImage(id: number, image: string) {
     return this.usersRepository.update(id, {
       image,
@@ -68,5 +78,18 @@ export class UsersService {
 
   remove(id: number) {
     return this.usersRepository.delete({ id });
+  }
+
+  async updateCurrentUserToken(id: number, params: UpdateUserTokenDto) {
+    const userToUpdate = this.usersRepository.create({
+      id: Number(id),
+      mobileToken: params.token,
+    });
+
+    await this.usersRepository.save(userToUpdate);
+
+    const updatedUser = this.findOne(id);
+
+    return updatedUser;
   }
 }

@@ -5,7 +5,6 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
   Post,
   UseInterceptors,
   UploadedFile,
@@ -17,6 +16,9 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
+import { UpdateUserTokenDto } from './dto/update-user-token.dto';
+import { UpdateUserParam } from './dto/update-user-param.dto';
+import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
@@ -51,5 +53,14 @@ export class UsersController {
   @Delete(":id")
   remove(@Param("id") id: string) {
     return this.usersService.remove(+id);
+  }
+
+  @Patch(":id/token")
+  @UseInterceptors(ParamContextInterceptor)
+  async updateCurrentUserToken(
+    @Param() params: UpdateUserParam,
+    @Body() body: UpdateUserTokenDto
+  ) {
+    return this.usersService.updateCurrentUserToken(params.id, body);
   }
 }

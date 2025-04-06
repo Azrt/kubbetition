@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -29,6 +30,19 @@ export class AuthService {
       secret: this.configService.get("JWT_SECRET"),
       expiresIn: `${this.configService.get("JWT_EMAIL_EXPIRATION_TIME")}s`,
     });
+  }
+
+  async verifyJwt(jwt: string): Promise<{ user: User; exp: number }> {
+    if (!jwt) {
+      throw new UnauthorizedException();
+    }
+
+    try {
+      const { user, exp } = await this.jwtService.verifyAsync(jwt);
+      return { user, exp };
+    } catch (error) {
+      throw new UnauthorizedException();
+    }
   }
 
   async googleLogin(req) {
