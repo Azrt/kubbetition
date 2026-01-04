@@ -12,6 +12,7 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleOauthGuard } from './guards/google-oauth.guard';
 import { GoogleLoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
@@ -47,15 +48,11 @@ export class AuthController {
   ): Promise<any> {
     try {
       const user = await this.authService.googleTokenLogin(params.token);
-      const jwtToken = await this.authService.generateJwt({
-        sub: user.id,
-        email: user.email,
-        isEmailConfirmed: user.isEmailConfirmed,
-      });
+      const tokens = this.authService.generateTokens(user);
 
       const data = {
         user,
-        token: jwtToken,
+        ...tokens,
       };
 
       res.status(HttpStatus.OK).json(data);
@@ -64,7 +61,20 @@ export class AuthController {
     }
   }
 
-  
+  @Public()
+  @Post("refresh")
+  async refreshTokens(
+    @Body() params: RefreshTokenDto,
+    @Res() res: Response
+  ): Promise<any> {
+    try {
+      const tokens = await this.authService.refreshTokens(params.refreshToken);
+      res.status(HttpStatus.OK).json(tokens);
+    } catch (e) {
+      res.status(HttpStatus.UNAUTHORIZED).json({ message: e.message });
+    }
+  }
+
   @Get("me")
   async currentUserData(@CurrentUser() user: User) {
     return this.authService.getCurrentUser(user);
