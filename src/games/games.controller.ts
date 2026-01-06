@@ -65,6 +65,22 @@ export class GamesController {
     return this.gamesService.findAllUserActive(currentUser);
   }
 
+  @Get("history")
+  findCurrentUserHistory(
+    @CurrentUser() currentUser: User,
+    @Paginate() query: PaginateQuery
+  ): Promise<Paginated<Game>> {
+    return this.gamesService.findUserHistory(currentUser.id, query);
+  }
+
+  @Get("history/:userId")
+  findUserHistory(
+    @Param("userId") userId: string,
+    @Paginate() query: PaginateQuery
+  ): Promise<Paginated<Game>> {
+    return this.gamesService.findUserHistory(+userId, query);
+  }
+
   @Get(":gameId")
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("gameId") gameId: string) {

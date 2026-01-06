@@ -104,6 +104,34 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
+  async findUserHistory(userId: number, query?: PaginateQuery) {
+    const queryBuilder = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .where('game.endTime IS NOT NULL')
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: false })
+      .andWhere(
+        '(team1Members.id = :userId OR team2Members.id = :userId)',
+        { userId }
+      )
+      .orderBy('game.endTime', 'DESC');
+
+    const result = await paginate(query, queryBuilder, {
+      sortableColumns: ['id', 'endTime', 'startTime'],
+      defaultSortBy: [['endTime', 'DESC']],
+      maxLimit: 50,
+    });
+
+    // Compute properties for each game
+    result.data.forEach(game => this.computeGameProperties(game));
+
+    return result;
+  }
+
   // Team operations
   async joinTeam(gameId: number, team: 1 | 2, user: User) {
     const game = await this.findOne(gameId);

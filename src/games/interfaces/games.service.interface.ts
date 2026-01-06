@@ -11,6 +11,7 @@ export interface GamesServiceInterface {
   findOne(id: number): Promise<Game>;
   cancelGame(id: number): Promise<Game>;
   findAllUserActive(user: User): Promise<Array<Game>>;
+  findUserHistory(userId: number, query?: PaginateQuery): Promise<Paginated<Game>>;
   joinTeam(gameId: number, team: 1 | 2, user: User): Promise<Game>;
   leaveTeam(gameId: number, user: User): Promise<Game>;
   setTeamReady(gameId: number, team: 1 | 2, user: User): Promise<Game>;
