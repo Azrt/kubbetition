@@ -6,20 +6,21 @@ import {
 } from "class-validator";
 import { UsersService } from "src/users/users.service";
 
-@ValidatorConstraint({ async: true, name: "TeamMembersExist" })
+@ValidatorConstraint({ async: true, name: "UsersExist" })
 @Injectable()
-export class TeamMembersExistsRule implements ValidatorConstraintInterface {
+export class UsersExistRule implements ValidatorConstraintInterface {
   constructor(private usersService: UsersService) {}
 
   async validate(ids: Array<number>, validationArguments: ValidationArguments) {
-    if (!ids?.length) return false;
+    if (!ids?.length) return true; // Empty array is valid (optional field)
 
-    const members = await this.usersService.findByIds(ids);
+    const users = await this.usersService.findByIds(ids);
     
-    return members.length === ids.length;
+    return users.length === ids.length;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {
-    return "Members doesn't exists";
+    return "One or more users do not exist";
   }
 }
+

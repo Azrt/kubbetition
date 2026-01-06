@@ -54,7 +54,7 @@ export class GamesGateway
   }
 
   sendGameDataToClients(game: Game) {
-    const members = game.members.map(({ id }) => id);
+    const members = game.allMembers?.map(({ id }) => id) ?? [];
 
     members.forEach((client) => {
       const socket = this.connectedClients.get(client);

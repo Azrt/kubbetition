@@ -1,9 +1,7 @@
-import { IsArray, MaxLength, MinLength } from "class-validator";
 import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
-import { Score } from "src/scores/entities/score.entity";
 import { User } from "src/users/entities/user.entity";
-import { AfterLoad, Column, Entity, JoinColumn, JoinTable, ManyToMany, ManyToOne, OneToMany } from "typeorm";
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from "typeorm";
 
 @Entity()
 export class Game extends Common {
@@ -19,22 +17,6 @@ export class Game extends Common {
   @Column({ type: "bool", default: false })
   isCancelled: boolean;
 
-  @ManyToMany(() => User, {
-    cascade: true,
-  })
-  @JoinTable({
-    name: "game_participants",
-    joinColumn: {
-      name: "game_id",
-      referencedColumnName: "id",
-    },
-    inverseJoinColumn: {
-      name: "member_id",
-      referencedColumnName: "id",
-    },
-  })
-  members: Array<User>;
-
   @Column({
     type: "enum",
     enum: GameType,
@@ -48,36 +30,38 @@ export class Game extends Common {
   })
   duration: number;
 
-  @IsArray()
-  @MaxLength(2, { each: true })
-  @MinLength(2, { each: true })
-  @OneToMany(() => Score, (score) => score.game, {
-    nullable: true,
+  // Team 1
+  @ManyToMany(() => User, { cascade: true })
+  @JoinTable({
+    name: "game_team1_members",
+    joinColumn: { name: "game_id", referencedColumnName: "id" },
+    inverseJoinColumn: { name: "member_id", referencedColumnName: "id" },
   })
-  @JoinColumn()
-  scores: [Score, Score];
+  team1Members: User[];
 
+  @Column({ type: "int", nullable: true })
+  team1Score: number | null;
+
+  @Column({ default: false })
+  team1Ready: boolean;
+
+  // Team 2
+  @ManyToMany(() => User, { cascade: true })
+  @JoinTable({
+    name: "game_team2_members",
+    joinColumn: { name: "game_id", referencedColumnName: "id" },
+    inverseJoinColumn: { name: "member_id", referencedColumnName: "id" },
+  })
+  team2Members: User[];
+
+  @Column({ type: "int", nullable: true })
+  team2Score: number | null;
+
+  @Column({ default: false })
+  team2Ready: boolean;
+
+  // Computed properties (populated after load)
   isGameReady: boolean;
-
-  winner: null | Score;
-
-  @AfterLoad()
-  afterLoad() {
-    if (this.endTime) {
-      const winningScore = this.scores?.reduce<Score | null>(
-        (accumulator, current) => {
-          if (current.value && current.value > (accumulator?.value ?? 0)) {
-            return current;
-          }
-
-          return accumulator;
-        },
-        null
-      );
-
-      this.winner = winningScore;
-    }
-
-    this.isGameReady = !!this.scores?.every((score) => score.isReady);
-  }
+  winner: 1 | 2 | null;
+  allMembers: User[];
 }

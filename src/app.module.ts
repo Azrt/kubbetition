@@ -16,7 +16,6 @@ import { join } from 'path';
 import { TeamsModule } from './teams/teams.module';
 import { DatabaseModule } from './common/modules/database.module';
 import { GamesModule } from './games/games.module';
-import { ScoresModule } from './scores/scores.module';
 import { EmailModule } from './email/email.module';
 import { TeamRequestsModule } from './team-requests/team-requests.module';
 import { JwtModule } from '@nestjs/jwt';
@@ -61,7 +60,6 @@ import { RedisModule } from './common/modules/redis.module';
     EmailModule,
     UsersModule,
     TeamsModule,
-    ScoresModule,
     GamesModule,
     TeamRequestsModule,
   ],

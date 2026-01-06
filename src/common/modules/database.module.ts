@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Team } from '../../teams/entities/team.entity';
 import { Game } from "../../games/entities/game.entity";
-import { Score } from '../../scores/entities/score.entity';
 
 @Module({
   imports: [
@@ -18,7 +17,7 @@ import { Score } from '../../scores/entities/score.entity';
         username: configService.get("POSTGRES_USER"),
         password: configService.get("POSTGRES_PASSWORD"),
         database: configService.get("POSTGRES_DB"),
-        entities: [User, Team, Game, Score],
+        entities: [User, Team, Game],
         synchronize: true,
         logging: true,
         autoLoadEntities: true,

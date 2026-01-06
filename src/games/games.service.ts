@@ -1,132 +1,83 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { DataSource, IsNull, Repository } from 'typeorm';
-import { Score } from 'src/scores/entities/score.entity';
+import { IsNull, Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
 import { GamesServiceInterface } from './interfaces/games.service.interface';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { GameReadyEvent, GAME_READY_EVENT } from './events/game-ready.event';
+import { GameUpdateEvent, GAME_UPDATE_EVENT } from './events/game-update.event';
 
 @Injectable()
 export class GamesService implements GamesServiceInterface {
   constructor(
     @InjectRepository(Game)
     private gamesRepository: Repository<Game>,
-    @InjectRepository(Score)
-    private scoresRepository: Repository<Score>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private dataSource: DataSource,
+    private eventEmitter: EventEmitter2,
   ) {}
+
   async create(createGameDto: CreateGameDto, currentUser: User) {
-    const queryRunner = this.dataSource.createQueryRunner();
+    const { participants, ...data } = createGameDto;
 
-    await queryRunner.connect();
+    const game = this.gamesRepository.create({
+      ...data,
+      createdBy: currentUser,
+      team1Members: [],
+      team2Members: [],
+      team1Score: null,
+      team2Score: null,
+      team1Ready: false,
+      team2Ready: false,
+    });
 
-    await queryRunner.startTransaction();
-
-    try {
-      const { firstTeam, secondTeam, participants, ...data } = createGameDto;
-
-      const members = participants.map((id) =>
-        this.usersRepository.create({ id })
-      );
-
-      const gameData = await this.gamesRepository.create({
-        ...data,
-        createdBy: currentUser,
-        members,
-      });
-
-      const game = await queryRunner.manager.save(gameData);
-
-      const firstTeamScoreData = this.scoresRepository.create({
-        members: [],
-        value: null,
-        game,
-      });
-
-      const secondTeamScoreData = this.scoresRepository.create({
-        members: [],
-        value: null,
-        game,
-      });
-
-      await queryRunner.manager.save(firstTeamScoreData);
-      await queryRunner.manager.save(secondTeamScoreData);
-
-      await queryRunner.commitTransaction();
-
-      return game;
-    } catch (e) {
-      await queryRunner.rollbackTransaction();
-
-      throw new BadRequestException();
-    } finally {
-      await queryRunner.release();
-    }
+    const savedGame = await this.gamesRepository.save(game);
+    return this.findOne(savedGame.id);
   }
 
   async endGame(id: number) {
-    const game = this.gamesRepository.create({
-      id,
-      endTime: new Date().toISOString(),
+    await this.gamesRepository.update(id, {
+      endTime: new Date(),
     });
 
-    await this.gamesRepository.save(game);
-
-    const updatedGame = await this.findOne(id);
-
-    return updatedGame;
+    return this.findOne(id);
   }
 
   async startGame(id: number) {
-    const game = this.gamesRepository.create({
-      id,
-      startTime: new Date().toISOString(),
+    await this.gamesRepository.update(id, {
+      startTime: new Date(),
     });
 
-    await this.gamesRepository.save(game);
-
-    const updatedGame = await this.findOne(id);
-
-    return updatedGame;
+    return this.findOne(id);
   }
 
   findAll(query?: PaginateQuery) {
     return paginate(query, this.gamesRepository, GAMES_PAGINATION_CONFIG);
   }
 
-  findOne(id: number) {
-    return this.gamesRepository.findOne({
+  async findOne(id: number) {
+    const game = await this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
-      where: {
-        id,
-      },
+      where: { id },
     });
-  }
 
-  findOneByScore(scoreId: number) {
-    return this.gamesRepository.findOne({
-      relations: GAME_RELATIONS,
-      where: {
-        scores: {
-          id: scoreId,
-        },
-      },
-    });
+    if (game) {
+      this.computeGameProperties(game);
+    }
+
+    return game;
   }
 
   cancelGame(id: number) {
-    const game = this.gamesRepository.create({
+    return this.gamesRepository.save({
       id,
       isCancelled: true,
     });
-  
-    return this.gamesRepository.save(game);
   }
 
   update(id: number, updateGameDto: UpdateGameDto) {
@@ -140,15 +91,167 @@ export class GamesService implements GamesServiceInterface {
     return `This action removes a #${id} game`;
   }
 
-  findAllUserActive(user: User) {
-    return this.gamesRepository.find({
+  async findAllUserActive(user: User) {
+    const games = await this.gamesRepository.find({
       relations: GAME_RELATIONS,
-      where: {
-        endTime: IsNull(),
-        members: {
-          id: user?.id,
-        },
-      },
+      where: [
+        { endTime: IsNull(), team1Members: { id: user?.id } },
+        { endTime: IsNull(), team2Members: { id: user?.id } },
+      ],
     });
+
+    games.forEach(game => this.computeGameProperties(game));
+    return games;
+  }
+
+  // Team operations
+  async joinTeam(gameId: number, team: 1 | 2, user: User) {
+    const game = await this.findOne(gameId);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    const teamKey = team === 1 ? 'team1Members' : 'team2Members';
+    const currentMembers = game[teamKey] || [];
+
+    // Check if user already in a team
+    const inTeam1 = game.team1Members?.some(m => m.id === user.id);
+    const inTeam2 = game.team2Members?.some(m => m.id === user.id);
+
+    if (inTeam1 || inTeam2) {
+      throw new BadRequestException('User already joined a team');
+    }
+
+    // Check team size
+    if (currentMembers.length >= game.type) {
+      throw new BadRequestException('Team is full');
+    }
+
+    await this.gamesRepository
+      .createQueryBuilder()
+      .relation(Game, teamKey)
+      .of(gameId)
+      .add(user.id);
+
+    return this.findOne(gameId);
+  }
+
+  async leaveTeam(gameId: number, user: User) {
+    const game = await this.findOne(gameId);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    const inTeam1 = game.team1Members?.some(m => m.id === user.id);
+    const inTeam2 = game.team2Members?.some(m => m.id === user.id);
+
+    if (!inTeam1 && !inTeam2) {
+      throw new BadRequestException('User not in any team');
+    }
+
+    const teamKey = inTeam1 ? 'team1Members' : 'team2Members';
+
+    await this.gamesRepository
+      .createQueryBuilder()
+      .relation(Game, teamKey)
+      .of(gameId)
+      .remove(user.id);
+
+    return this.findOne(gameId);
+  }
+
+  async setTeamReady(gameId: number, team: 1 | 2, user: User) {
+    const game = await this.findOne(gameId);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
+    const isInTeam = teamMembers?.some(m => m.id === user.id);
+
+    if (!isInTeam) {
+      throw new BadRequestException('User not in this team');
+    }
+
+    // Check team has required members
+    if (teamMembers.length !== game.type) {
+      throw new BadRequestException(`Team needs exactly ${game.type} members`);
+    }
+
+    const readyKey = team === 1 ? 'team1Ready' : 'team2Ready';
+    await this.gamesRepository.update(gameId, { [readyKey]: true });
+
+    const updatedGame = await this.findOne(gameId);
+
+    // Auto-start game if both teams ready
+    if (updatedGame.isGameReady && !updatedGame.startTime) {
+      const gameReadyEvent = new GameReadyEvent(gameId);
+      this.eventEmitter.emit(GAME_READY_EVENT, gameReadyEvent);
+      return this.startGame(gameId);
+    }
+
+    return updatedGame;
+  }
+
+  async updateTeamScore(gameId: number, team: 1 | 2, score: number, user: User) {
+    const game = await this.findOne(gameId);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    if (!game.isGameReady) {
+      throw new BadRequestException('Game is not ready yet');
+    }
+
+    if (game.endTime) {
+      throw new BadRequestException('Game already ended');
+    }
+
+    if (game.isCancelled) {
+      throw new BadRequestException('Game is cancelled');
+    }
+
+    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
+    const isInTeam = teamMembers?.some(m => m.id === user.id);
+
+    if (!isInTeam) {
+      throw new BadRequestException('User not in this team');
+    }
+
+    const scoreKey = team === 1 ? 'team1Score' : 'team2Score';
+    await this.gamesRepository.update(gameId, { [scoreKey]: score });
+
+    const updatedGame = await this.findOne(gameId);
+
+    // Auto-end game if both scores submitted
+    if (updatedGame.team1Score !== null && updatedGame.team2Score !== null) {
+      const gameUpdateEvent = new GameUpdateEvent(gameId);
+      this.eventEmitter.emit(GAME_UPDATE_EVENT, gameUpdateEvent);
+      return this.endGame(gameId);
+    }
+
+    return updatedGame;
+  }
+
+  // Helper to compute properties after loading
+  private computeGameProperties(game: Game) {
+    game.isGameReady = game.team1Ready && game.team2Ready;
+    game.allMembers = [...(game.team1Members || []), ...(game.team2Members || [])];
+
+    if (game.endTime && game.team1Score !== null && game.team2Score !== null) {
+      if (game.team1Score > game.team2Score) {
+        game.winner = 1;
+      } else if (game.team2Score > game.team1Score) {
+        game.winner = 2;
+      } else {
+        game.winner = null; // tie
+      }
+    } else {
+      game.winner = null;
+    }
   }
 }

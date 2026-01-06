@@ -1,7 +1,6 @@
 import { Exclude } from 'class-transformer';
 import { Role } from 'src/common/enums/role.enum';
 import { Game } from 'src/games/entities/game.entity';
-import { Score } from 'src/scores/entities/score.entity';
 import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { Team } from 'src/teams/entities/team.entity';
 import {
@@ -65,9 +64,6 @@ export class User {
 
   @OneToMany(() => Game, (game) => game.createdBy)
   createdGames: Array<Game>;
-
-  @OneToMany(() => Score, (game) => game.members)
-  scores: Array<Score>;
 
   constructor(entity: Partial<User>) {
     Object.assign(this, entity);

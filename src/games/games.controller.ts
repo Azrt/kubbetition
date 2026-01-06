@@ -13,10 +13,11 @@ import { CancelGameDto } from './dto/cancel-game.dto';
 import { EndGameDto } from './dto/end-game.dto';
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
 import { GamesGateway } from './games.gateway';
-import { ConnectedSocket } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
 import { NotificationsService } from 'src/common/services/notifications.service';
 import { UsersService } from 'src/users/users.service';
+import { JoinTeamParamsDto } from './dto/join-team.dto';
+import { TeamReadyParamsDto } from './dto/team-ready.dto';
+import { UpdateTeamScoreParamsDto, UpdateTeamScoreBodyDto } from './dto/update-team-score.dto';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
@@ -32,17 +33,21 @@ export class GamesController {
   async create(
     @Body() createGameDto: CreateGameDto,
     @CurrentUser() currentUser: User,
-    @ConnectedSocket() socket: Socket
   ) {
-    const tokens = await this.usersService.getMobileTokens(createGameDto.participants);
-
-    const tokensArray = tokens.map(({ token }) => token)
-
     const game = await this.gamesService.create(createGameDto, currentUser);
   
-    const title = 'New game has been created!'
-    const body = `${game.createdBy.firstName} ${game.createdBy.lastName} started a new game`
-    await this.notificationsService.sendToUsers(tokensArray, title, body);
+    // Notify invited participants if any
+    if (createGameDto.participants?.length) {
+      const tokens = await this.usersService.getMobileTokens(createGameDto.participants);
+      const tokensArray = tokens.map(({ token }) => token).filter(Boolean);
+
+      if (tokensArray.length) {
+        const title = 'New game has been created!';
+        const body = `${game.createdBy.firstName} ${game.createdBy.lastName} started a new game`;
+        await this.notificationsService.sendToUsers(tokensArray, title, body);
+      }
+    }
+
     await this.gamesGateway.sendGameDataToClients(game);
 
     return game;
@@ -88,13 +93,80 @@ export class GamesController {
     const game = await this.gamesService.endGame(+params.gameId);
     await this.gamesGateway.sendGameDataToClients(game);
 
-    return game
+    return game;
   }
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/cancel")
   async cancel(@Param() params: CancelGameDto) {
     const game = await this.gamesService.cancelGame(+params.gameId);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
+  }
+
+  // Team operations
+  @UseInterceptors(ParamContextInterceptor)
+  @Post(":gameId/team/:team/join")
+  async joinTeam(
+    @Param() params: JoinTeamParamsDto,
+    @CurrentUser() user: User
+  ) {
+    const game = await this.gamesService.joinTeam(
+      +params.gameId,
+      +params.team as 1 | 2,
+      user
+    );
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
+  }
+
+  @UseInterceptors(ParamContextInterceptor)
+  @Post(":gameId/leave")
+  async leaveTeam(
+    @Param("gameId") gameId: string,
+    @CurrentUser() user: User
+  ) {
+    const game = await this.gamesService.leaveTeam(+gameId, user);
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
+  }
+
+  @UseInterceptors(ParamContextInterceptor)
+  @Post(":gameId/team/:team/ready")
+  async setTeamReady(
+    @Param() params: TeamReadyParamsDto,
+    @CurrentUser() user: User
+  ) {
+    const game = await this.gamesService.setTeamReady(
+      +params.gameId,
+      +params.team as 1 | 2,
+      user
+    );
+
+    await this.gamesGateway.sendGameDataToClients(game);
+
+    return game;
+  }
+
+  @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  @Patch(":gameId/team/:team/score")
+  async updateTeamScore(
+    @Param() params: UpdateTeamScoreParamsDto,
+    @Body() body: UpdateTeamScoreBodyDto,
+    @CurrentUser() user: User
+  ) {
+    const game = await this.gamesService.updateTeamScore(
+      +params.gameId,
+      +params.team as 1 | 2,
+      body.score,
+      user
+    );
 
     await this.gamesGateway.sendGameDataToClients(game);
 
