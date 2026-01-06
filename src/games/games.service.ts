@@ -4,13 +4,16 @@ import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
 import { IsNull, Repository } from 'typeorm';
-import { PaginateQuery, paginate } from 'nestjs-paginate';
+import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
 import { GamesServiceInterface } from './interfaces/games.service.interface';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { GameReadyEvent, GAME_READY_EVENT } from './events/game-ready.event';
 import { GameUpdateEvent, GAME_UPDATE_EVENT } from './events/game-update.event';
+import { RedisService } from 'src/common/services/redis.service';
+
+const HISTORY_CACHE_TTL = 300000; // 5 minutes in ms
 
 @Injectable()
 export class GamesService implements GamesServiceInterface {
@@ -20,6 +23,7 @@ export class GamesService implements GamesServiceInterface {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private eventEmitter: EventEmitter2,
+    private redisService: RedisService,
   ) {}
 
   async create(createGameDto: CreateGameDto, currentUser: User) {
@@ -45,7 +49,14 @@ export class GamesService implements GamesServiceInterface {
       endTime: new Date(),
     });
 
-    return this.findOne(id);
+    const game = await this.findOne(id);
+
+    // Invalidate cache for all participants
+    if (game) {
+      await this.invalidateHistoryCacheForGame(game);
+    }
+
+    return game;
   }
 
   async startGame(id: number) {
@@ -73,11 +84,20 @@ export class GamesService implements GamesServiceInterface {
     return game;
   }
 
-  cancelGame(id: number) {
-    return this.gamesRepository.save({
+  async cancelGame(id: number) {
+    const game = await this.findOne(id);
+    
+    await this.gamesRepository.save({
       id,
       isCancelled: true,
     });
+
+    // Invalidate cache for participants if game was completed
+    if (game?.endTime) {
+      await this.invalidateHistoryCacheForGame(game);
+    }
+
+    return this.findOne(id);
   }
 
   update(id: number, updateGameDto: UpdateGameDto) {
@@ -104,7 +124,18 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
-  async findUserHistory(userId: number, query?: PaginateQuery) {
+  async findUserHistory(userId: number, query?: PaginateQuery): Promise<Paginated<Game>> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
+    const cacheKey = RedisService.gameHistoryKey(userId, page, limit);
+
+    // Try to get from cache
+    const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Query from database
     const queryBuilder = this.gamesRepository
       .createQueryBuilder('game')
       .leftJoinAndSelect('game.createdBy', 'createdBy')
@@ -128,6 +159,9 @@ export class GamesService implements GamesServiceInterface {
 
     // Compute properties for each game
     result.data.forEach(game => this.computeGameProperties(game));
+
+    // Store in cache
+    await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
 
     return result;
   }
@@ -281,5 +315,19 @@ export class GamesService implements GamesServiceInterface {
     } else {
       game.winner = null;
     }
+  }
+
+  // Invalidate history cache for all game participants
+  private async invalidateHistoryCacheForGame(game: Game) {
+    const userIds = new Set<number>();
+    
+    game.team1Members?.forEach(m => userIds.add(m.id));
+    game.team2Members?.forEach(m => userIds.add(m.id));
+
+    await Promise.all(
+      Array.from(userIds).map(userId =>
+        this.redisService.delByPattern(RedisService.gameHistoryPattern(userId))
+      )
+    );
   }
 }

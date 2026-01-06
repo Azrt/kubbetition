@@ -15,6 +15,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from 'src/auth/auth.service';
 import { GamesGateway } from './games.gateway';
 import { FirebaseModule } from 'src/common/modules/firebase.module';
+import { RedisService } from 'src/common/services/redis.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { FirebaseModule } from 'src/common/modules/firebase.module';
     JwtService,
     AuthService,
     GamesGateway,
+    RedisService,
   ],
   exports: [GamesService],
 })
