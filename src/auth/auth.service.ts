@@ -10,6 +10,10 @@ import { UsersService } from 'src/users/users.service';
 import { Auth, google } from 'googleapis';
 import { parseGoogleUserData } from './auth.helpers';
 import { User } from 'src/users/entities/user.entity';
+import {
+  ACCESS_TOKEN_EXPIRATION,
+  REFRESH_TOKEN_EXPIRATION,
+} from 'src/app.constants';
 
 @Injectable()
 export class AuthService {
@@ -25,23 +29,48 @@ export class AuthService {
     this.clientSecret = this.configService.get("GOOGLE_SECRET");
   }
 
-  generateJwt(payload) {
+  generateAccessToken(payload) {
     return this.jwtService.sign(payload, {
-      secret: this.configService.get("JWT_SECRET"),
-      expiresIn: `${this.configService.get("JWT_EMAIL_EXPIRATION_TIME")}s`,
+      secret: this.configService.get('JWT_SECRET'),
+      expiresIn: ACCESS_TOKEN_EXPIRATION,
     });
   }
 
-  async verifyJwt(jwt: string): Promise<{ user: User; exp: number }> {
-    if (!jwt) {
-      throw new UnauthorizedException();
-    }
+  generateRefreshToken(payload) {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_REFRESH_SECRET'),
+      expiresIn: REFRESH_TOKEN_EXPIRATION,
+    });
+  }
 
+  generateTokens(user: User) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      isEmailConfirmed: user.isEmailConfirmed,
+    };
+
+    return {
+      accessToken: this.generateAccessToken(payload),
+      refreshToken: this.generateRefreshToken(payload),
+    };
+  }
+
+  async refreshTokens(refreshToken: string) {
     try {
-      const { user, exp } = await this.jwtService.verifyAsync(jwt);
-      return { user, exp };
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
+
+      const user = await this.usersService.findOne(payload.sub);
+
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      return this.generateTokens(user);
     } catch (error) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
 
