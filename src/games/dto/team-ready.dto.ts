@@ -9,3 +9,5 @@ export class TeamReadyParamsDto extends ContextAwareDto {
   team: '1' | '2';
 }
 
+
+
