@@ -8,8 +8,8 @@ import { useContainer } from 'class-validator';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    allowedHeaders: ["content-type"],
-    origin: "http://localhost:3000",
+    allowedHeaders: ["content-type", "authorization"],
+    origin: true, // Allow all origins for mobile apps
     credentials: true,
   });
 

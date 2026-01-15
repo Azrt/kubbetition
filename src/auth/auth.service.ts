@@ -7,7 +7,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { UsersService } from 'src/users/users.service';
-import { Auth, google } from 'googleapis';
+import { google, Auth } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
 import { parseGoogleUserData } from './auth.helpers';
 import { User } from 'src/users/entities/user.entity';
 import {
@@ -17,8 +18,9 @@ import {
 
 @Injectable()
 export class AuthService {
-  private clientId;
-  private clientSecret;
+  private clientId: string;
+  private clientSecret: string;
+  private oAuth2Client: OAuth2Client;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -27,6 +29,7 @@ export class AuthService {
   ) {
     this.clientId = this.configService.get("GOOGLE_CLIENT_ID");
     this.clientSecret = this.configService.get("GOOGLE_SECRET");
+    this.oAuth2Client = new OAuth2Client(this.clientId);
   }
 
   generateAccessToken(payload) {
@@ -87,7 +90,7 @@ export class AuthService {
     return user;
   }
 
-  async getGoogleUser(access_token: string) {
+  async getGoogleUserByAccessToken(access_token: string) {
     const oauth2Client = new google.auth.OAuth2({
       clientId: this.clientId,
       clientSecret: this.clientSecret,
@@ -106,9 +109,38 @@ export class AuthService {
     return parseGoogleUserData(data);
   }
 
-  async googleTokenLogin(idToken: string) {
+  async verifyGoogleIdToken(idToken: string): Promise<CreateUserDto> {
+    const ticket = await this.oAuth2Client.verifyIdToken({
+      idToken,
+      audience: this.clientId,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      throw new BadRequestException('Invalid ID token payload');
+    }
+
+    return {
+      email: payload.email ?? '',
+      firstName: payload.given_name ?? '',
+      lastName: payload.family_name ?? '',
+      image: payload.picture ?? '',
+    };
+  }
+
+  async googleTokenLogin(token: string) {
     try {
-      const user = await this.getGoogleUser(idToken);
+      let user: CreateUserDto;
+
+      // Try to verify as ID token first (from Android/iOS apps)
+      // ID tokens are JWTs that start with "eyJ"
+      if (token.startsWith('eyJ')) {
+        user = await this.verifyGoogleIdToken(token);
+      } else {
+        // Fall back to access token verification (for web clients)
+        user = await this.getGoogleUserByAccessToken(token);
+      }
 
       const existingUser = await this.findUserByEmail(user.email);
 
