@@ -2,8 +2,10 @@ import { ApiProperty } from "@nestjs/swagger";
 import { IsArray, IsDefined, IsEnum, IsInt, IsOptional, Max, Min, Validate } from "class-validator";
 import { GameType } from "src/common/enums/gameType";
 import { UsersExistRule } from "../validation/users-exist.rule";
+import { ParticipantsAreFriendsOrTeamMembersRule } from "../validation/participants-are-friends-or-team-members.rule";
+import { ContextAwareDto } from "src/common/dto/context-aware.dto";
 
-export class CreateGameDto {
+export class CreateGameDto extends ContextAwareDto {
   @ApiProperty({ readOnly: true })
   readonly id: number;
 
@@ -15,6 +17,7 @@ export class CreateGameDto {
   @IsOptional()
   @IsArray()
   @Validate(UsersExistRule)
+  @Validate(ParticipantsAreFriendsOrTeamMembersRule)
   participants?: Array<number>;
 
   @ApiProperty({ description: 'Game duration in minutes (5-60)' })

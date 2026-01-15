@@ -5,6 +5,7 @@ import { UpdateGameDto } from './dto/update-game.dto';
 import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 import { Game } from './entities/game.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
+import { BodyContextInterceptor } from 'src/common/interceptors/body-context.interceptor';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
@@ -30,6 +31,7 @@ export class GamesController {
   ) {}
 
   @Post()
+  @UseInterceptors(BodyContextInterceptor)
   async create(
     @Body() createGameDto: CreateGameDto,
     @CurrentUser() currentUser: User,
@@ -88,6 +90,7 @@ export class GamesController {
   }
 
   @Patch(":gameId")
+  @UseInterceptors(BodyContextInterceptor)
   async update(
     @Param("gameId") gameId: string,
     @Body() updateGameDto: UpdateGameDto
