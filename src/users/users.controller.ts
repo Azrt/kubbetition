@@ -8,6 +8,7 @@ import {
   Post,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -23,6 +24,7 @@ import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from './entities/user.entity';
 import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
 import { FriendRequestParamDto } from './dto/friend-request-param.dto';
+import { SearchUsersDto } from './dto/search-users.dto';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
@@ -32,6 +34,15 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get("search")
+  search(@Query() searchParams: SearchUsersDto) {
+    return this.usersService.search(
+      searchParams.email,
+      searchParams.lastName,
+      searchParams.teamId
+    );
   }
 
   @Get("friends")

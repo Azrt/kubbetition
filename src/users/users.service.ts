@@ -29,6 +29,26 @@ export class UsersService {
     return this.usersRepository.find({ relations: ['team'] });
   }
 
+  async search(email?: string, lastName?: string, teamId?: number) {
+    const queryBuilder = this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.team', 'team');
+
+    if (email) {
+      queryBuilder.andWhere('user.email LIKE :email', { email: `%${email}%` });
+    }
+
+    if (lastName) {
+      queryBuilder.andWhere('user.lastName LIKE :lastName', { lastName: `%${lastName}%` });
+    }
+
+    if (teamId !== undefined) {
+      queryBuilder.andWhere('team.id = :teamId', { teamId });
+    }
+
+    return queryBuilder.getMany();
+  }
+
   findOne(id: number) {
     return this.usersRepository.findOne({
       where: { 
