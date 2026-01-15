@@ -19,6 +19,10 @@ import { NotFoundInterceptor } from 'src/common/interceptors/not-found.intercept
 import { UpdateUserTokenDto } from './dto/update-user-token.dto';
 import { UpdateUserParam } from './dto/update-user-param.dto';
 import { ParamContextInterceptor } from 'src/common/interceptors/param-context-interceptor';
+import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
+import { User } from './entities/user.entity';
+import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
+import { FriendRequestParamDto } from './dto/friend-request-param.dto';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
@@ -28,6 +32,41 @@ export class UsersController {
   @Get()
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get("friends")
+  getFriends(@CurrentUser() user: User) {
+    return this.usersService.getFriends(user);
+  }
+
+  @Post("friends/requests")
+  createFriendRequest(
+    @Body() createFriendRequestDto: CreateFriendRequestDto,
+    @CurrentUser() user: User
+  ) {
+    return this.usersService.createFriendRequest(createFriendRequestDto, user);
+  }
+
+  @Post("friends/requests/:friendRequestId/accept")
+  acceptFriendRequest(
+    @Param() params: FriendRequestParamDto,
+    @CurrentUser() user: User
+  ) {
+    return this.usersService.acceptFriendRequest(
+      +params.friendRequestId,
+      user
+    );
+  }
+
+  @Post("friends/requests/:friendRequestId/reject")
+  rejectFriendRequest(
+    @Param() params: FriendRequestParamDto,
+    @CurrentUser() user: User
+  ) {
+    return this.usersService.rejectFriendRequest(
+      +params.friendRequestId,
+      user
+    );
   }
 
   @Get(":id")
