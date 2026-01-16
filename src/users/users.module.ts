@@ -14,6 +14,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthService } from 'src/auth/auth.service';
 import { UserExistsRule } from 'src/common/validators/user-exists.rule';
 import { FriendRequestExistsRule } from './validators/friend-request-exists.rule';
+import { GeolocationService } from 'src/common/services/geolocation.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, Team, FriendRequest])],
@@ -29,6 +30,7 @@ import { FriendRequestExistsRule } from './validators/friend-request-exists.rule
     IsCurrentUserRule,
     UserExistsRule,
     FriendRequestExistsRule,
+    GeolocationService,
   ],
 })
 export class UsersModule {

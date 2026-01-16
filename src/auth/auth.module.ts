@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -17,6 +17,7 @@ import { EmailConfirmationGuard } from './guards/email-confirmation.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtMiddleware } from './middleware/jwt.middleware';
 import { GeolocationService } from 'src/common/services/geolocation.service';
+import { GamesModule } from 'src/games/games.module';
 
 const globalGuards = [
   {
@@ -38,6 +39,7 @@ const globalGuards = [
     ConfigModule,
     PassportModule,
     TypeOrmModule.forFeature([User, Team, FriendRequest]),
+    forwardRef(() => GamesModule),
   ],
   controllers: [AuthController],
   providers: [
@@ -50,6 +52,7 @@ const globalGuards = [
     GeolocationService,
     ...globalGuards,
   ],
+  exports: [AuthService],
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, forwardRef } from '@nestjs/common';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,16 +13,18 @@ import { CreatedByUserRule } from './validation/created-by-user.rule';
 import { GameReadyRule } from './validation/game-ready.rule';
 import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
 import { JwtService } from '@nestjs/jwt';
-import { AuthService } from 'src/auth/auth.service';
+import { AuthModule } from 'src/auth/auth.module';
 import { GamesGateway } from './games.gateway';
 import { FirebaseModule } from 'src/common/modules/firebase.module';
 import { RedisService } from 'src/common/services/redis.service';
 import { FriendRequest } from 'src/users/entities/friend-request.entity';
+import { GeolocationService } from 'src/common/services/geolocation.service';
 
 @Module({
   imports: [
     FirebaseModule,
-    TypeOrmModule.forFeature([Game, User, Team, FriendRequest])
+    TypeOrmModule.forFeature([Game, User, Team, FriendRequest]),
+    forwardRef(() => AuthModule),
   ],
   controllers: [GamesController],
   providers: [
@@ -34,9 +36,9 @@ import { FriendRequest } from 'src/users/entities/friend-request.entity';
     CreatedByUserRule,
     GameReadyRule,
     JwtService,
-    AuthService,
     GamesGateway,
     RedisService,
+    GeolocationService,
   ],
   exports: [GamesService],
 })
