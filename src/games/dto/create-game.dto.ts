@@ -1,35 +1,26 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsDefined, IsEnum, IsInt, IsOptional, Max, Min, Validate } from "class-validator";
+import { IsArray, IsDefined, IsEnum, IsInt, IsOptional, Max, Min, Validate } from "class-validator";
 import { GameType } from "src/common/enums/gameType";
-import { TeamMembersNumberRule } from "../validation/team-members-number.rule";
-import { TeamMembersExistsRule } from "../validation/team-members-exists.rule";
-import { UniqueMembersRule } from "../validation/unique-members.rule";
-import { GameParticipantsNumberRule } from "../validation/game-participants-number.rule";
+import { UsersExistRule } from "../validation/users-exist.rule";
+import { ParticipantsAreFriendsOrTeamMembersRule } from "../validation/participants-are-friends-or-team-members.rule";
+import { ContextAwareDto } from "src/common/dto/context-aware.dto";
 
-export class CreateGameDto {
+export class CreateGameDto extends ContextAwareDto {
   @ApiProperty({ readOnly: true })
   readonly id: number;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Game type determining team size (1v1, 2v2, 3v3, 6v6)' })
   @IsEnum(GameType)
   type: GameType;
 
+  @ApiProperty({ description: 'Optional list of user IDs to invite/notify about the game' })
   @IsOptional()
-  @Validate(TeamMembersNumberRule)
-  @Validate(TeamMembersExistsRule)
-  firstTeam?: Array<number>;
+  @IsArray()
+  @Validate(UsersExistRule)
+  @Validate(ParticipantsAreFriendsOrTeamMembersRule)
+  participants?: Array<number>;
 
-  @IsOptional()
-  @Validate(TeamMembersNumberRule)
-  @Validate(TeamMembersExistsRule)
-  @Validate(UniqueMembersRule)
-  secondTeam?: Array<number>;
-
-  @IsDefined()
-  @Validate(TeamMembersExistsRule)
-  @Validate(GameParticipantsNumberRule)
-  participants: Array<number>;
-
+  @ApiProperty({ description: 'Game duration in minutes (5-60)' })
   @IsDefined()
   @Min(5)
   @Max(60)

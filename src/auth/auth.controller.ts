@@ -57,7 +57,11 @@ export class AuthController {
 
       res.status(HttpStatus.OK).json(data);
     } catch (e) {
-      res.status(HttpStatus.BAD_REQUEST).json(e);
+      res.status(HttpStatus.BAD_REQUEST).json({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: e?.message ?? 'Google login failed',
+        error: 'Bad Request',
+      });
     }
   }
 

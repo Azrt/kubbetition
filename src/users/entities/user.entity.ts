@@ -1,7 +1,8 @@
+import { Exclude } from 'class-transformer';
 import { Role } from 'src/common/enums/role.enum';
 import { Game } from 'src/games/entities/game.entity';
-import { Score } from 'src/scores/entities/score.entity';
 import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
+import { FriendRequest } from './friend-request.entity';
 import { Team } from 'src/teams/entities/team.entity';
 import {
   Entity,
@@ -38,6 +39,10 @@ export class User {
   @Column({ nullable: true, length: 450 })
   image: string;
 
+  @Column({ length: 1000, nullable: true })
+  @Exclude({ toPlainOnly: true })
+  mobileToken: string;
+
   @ManyToOne(() => Team, (team) => team.members, {
     cascade: true,
     nullable: true,
@@ -58,9 +63,22 @@ export class User {
   })
   teamRequests: Array<TeamRequest>;
 
+  @OneToMany(() => FriendRequest, (request) => request.requester, {
+    nullable: true,
+    cascade: true,
+  })
+  sentFriendRequests: Array<FriendRequest>;
+
+  @OneToMany(() => FriendRequest, (request) => request.recipient, {
+    nullable: true,
+    cascade: true,
+  })
+  receivedFriendRequests: Array<FriendRequest>;
+
   @OneToMany(() => Game, (game) => game.createdBy)
   createdGames: Array<Game>;
 
-  @OneToMany(() => Score, (game) => game.members)
-  scores: Array<Score>;
+  constructor(entity: Partial<User>) {
+    Object.assign(this, entity);
+  }
 }

@@ -2,10 +2,12 @@ version: '3.5'
 
 services:
   db:
-    image: postgres
+    image: postgres:16
     restart: always
     env_file:
       - .env
+    networks:
+      - mainnet
     container_name: kubbetition-postgres
     volumes:
       - ./pgdata:/var/lib/postgresql/data
@@ -17,13 +19,15 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: kubbetition
-    environment:
-      - PORT=${PORT}
+    env_file:
+      - .env
     ports:
       - '3000:3000'
     depends_on:
       - db
       - redis
+    networks:
+      - mainnet
     volumes:
       - ./src:/app/src
       # - ./src:/app/node_modules
@@ -32,6 +36,8 @@ services:
     image: dpage/pgadmin4
     restart: always
     container_name: kubbetition-pgadmin
+    networks:
+      - mainnet
     env_file:
       - .env
     ports:
@@ -41,8 +47,9 @@ services:
 
   redis:
     image: redis
-    container_name: kubbetition-redis
     command: /bin/sh -c "redis-server --requirepass $$REDIS_PASS"
+    networks:
+      - mainnet
     env_file:
       - .env
     ports:
@@ -54,6 +61,8 @@ services:
     image: rabbitmq:3-management
     container_name: kubbetition-rabbitmq
     hostname: rabbitmq
+    networks:
+      - mainnet
     env_file:
       - .env
     volumes:
@@ -61,3 +70,6 @@ services:
     ports:
       - '5672:5672'
       - '15672:15672'
+
+networks:
+  mainnet:

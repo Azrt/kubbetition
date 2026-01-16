@@ -1,4 +1,4 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
@@ -15,8 +15,10 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
     private readonly configService: ConfigService
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([(request: Request) => request?.cookies?.Authentication]),
-      secretOrKey: configService.get('JWT_SECRET'),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: Request) => request?.cookies?.Authentication,
+      ]),
+      secretOrKey: configService.get("JWT_SECRET"),
     });
   }
 
@@ -28,6 +30,18 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
 
     if (isPublic) return true;
 
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractTokenFromHeader(request);
+
+    if (!token) {
+      throw new UnauthorizedException();
+    }
+
     return super.canActivate(context);
+  }
+
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const [type, token] = request.headers.authorization?.split(" ") ?? [];
+    return type === "Bearer" ? token : undefined;
   }
 }
