@@ -255,4 +255,48 @@ export class UsersService {
 
     return this.friendRequestsRepository.save(updatedFriendRequest);
   }
+
+  async getReceivedFriendRequests(user: User) {
+    return this.friendRequestsRepository.find({
+      where: {
+        recipient: { id: user.id },
+        status: FriendRequestStatus.IN_PROGRESS,
+      },
+      relations: ['requester', 'recipient'],
+    });
+  }
+
+  async getSentFriendRequests(user: User) {
+    return this.friendRequestsRepository.find({
+      where: {
+        requester: { id: user.id },
+        status: FriendRequestStatus.IN_PROGRESS,
+      },
+      relations: ['requester', 'recipient'],
+    });
+  }
+
+  async deleteFriendRequest(id: number, user: User) {
+    const friendRequest = await this.findFriendRequest(id);
+
+    if (!friendRequest) {
+      throw new BadRequestException('Friend request doesn\'t exist');
+    }
+
+    if (friendRequest.status !== FriendRequestStatus.IN_PROGRESS) {
+      throw new BadRequestException('Friend request is not in progress');
+    }
+
+    // Allow deletion if user is either the requester or recipient
+    if (
+      friendRequest.requester.id !== user.id &&
+      friendRequest.recipient.id !== user.id
+    ) {
+      throw new BadRequestException(
+        'You can only delete your own friend requests'
+      );
+    }
+
+    return this.friendRequestsRepository.delete(id);
+  }
 }

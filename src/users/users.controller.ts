@@ -50,6 +50,16 @@ export class UsersController {
     return this.usersService.getFriends(user);
   }
 
+  @Get("friends/requests/received")
+  getReceivedFriendRequests(@CurrentUser() user: User) {
+    return this.usersService.getReceivedFriendRequests(user);
+  }
+
+  @Get("friends/requests/sent")
+  getSentFriendRequests(@CurrentUser() user: User) {
+    return this.usersService.getSentFriendRequests(user);
+  }
+
   @Post("friends/requests")
   createFriendRequest(
     @Body() createFriendRequestDto: CreateFriendRequestDto,
@@ -75,6 +85,17 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.rejectFriendRequest(
+      +params.friendRequestId,
+      user
+    );
+  }
+
+  @Delete("friends/requests/:friendRequestId")
+  deleteFriendRequest(
+    @Param() params: FriendRequestParamDto,
+    @CurrentUser() user: User
+  ) {
+    return this.usersService.deleteFriendRequest(
       +params.friendRequestId,
       user
     );
