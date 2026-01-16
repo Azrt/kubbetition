@@ -7,11 +7,12 @@ import { EmailConfirmationController } from "./emailConfirmation.controller";
 import { UsersService } from "src/users/users.service";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { User } from "src/users/entities/user.entity";
+import { FriendRequest } from "src/users/entities/friend-request.entity";
 import { TeamsService } from "src/teams/teams.service";
 import { Team } from "src/teams/entities/team.entity";
 
 @Module({
-  imports: [ConfigModule, TypeOrmModule.forFeature([User, Team])],
+  imports: [ConfigModule, TypeOrmModule.forFeature([User, Team, FriendRequest])],
   controllers: [EmailConfirmationController],
   providers: [
     EmailService,

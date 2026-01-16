@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Team } from "src/teams/entities/team.entity";
 import { User } from "src/users/entities/user.entity";
+import { FriendRequest } from "src/users/entities/friend-request.entity";
 import { TeamRequest } from "./entities/team-request.entity";
 import { TeamRequestsService } from "./team-requests.service";
 import { TeamRequestsController } from "./team-requests.controller";
@@ -13,7 +14,7 @@ import { UserTeamRequestExistsRule } from "./validation/user-team-request-exists
 import { TeamRequestExistsRule } from "./validation/team-request-exists.rule";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Team, User, TeamRequest])],
+  imports: [TypeOrmModule.forFeature([Team, User, TeamRequest, FriendRequest])],
   controllers: [TeamRequestsController],
   providers: [
     TeamRequestsService,

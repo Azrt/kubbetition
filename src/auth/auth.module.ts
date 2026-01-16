@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
+import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { UsersService } from 'src/users/users.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
@@ -35,7 +36,7 @@ const globalGuards = [
   imports: [
     ConfigModule,
     PassportModule,
-    TypeOrmModule.forFeature([User, Team]),
+    TypeOrmModule.forFeature([User, Team, FriendRequest]),
   ],
   controllers: [AuthController],
   providers: [
