@@ -16,6 +16,7 @@ import EmailService from 'src/email/email.service';
 import { EmailConfirmationGuard } from './guards/email-confirmation.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { JwtMiddleware } from './middleware/jwt.middleware';
+import { GeolocationService } from 'src/common/services/geolocation.service';
 
 const globalGuards = [
   {
@@ -46,6 +47,7 @@ const globalGuards = [
     JwtService,
     EmailService,
     ConfigService,
+    GeolocationService,
     ...globalGuards,
   ],
 })

@@ -15,6 +15,7 @@ import {
   ACCESS_TOKEN_EXPIRATION,
   REFRESH_TOKEN_EXPIRATION,
 } from 'src/app.constants';
+import { GeolocationService } from 'src/common/services/geolocation.service';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
+    private readonly geolocationService: GeolocationService,
   ) {
     this.clientId = this.configService.get("GOOGLE_CLIENT_ID");
     this.clientSecret = this.configService.get("GOOGLE_SECRET");
@@ -129,7 +131,7 @@ export class AuthService {
     };
   }
 
-  async googleTokenLogin(token: string) {
+  async googleTokenLogin(token: string, request?: any) {
     try {
       let user: CreateUserDto;
 
@@ -145,7 +147,7 @@ export class AuthService {
       const existingUser = await this.findUserByEmail(user.email);
 
       if (!existingUser) {
-        return this.registerUser(user);
+        return this.registerUser(user, request);
       }
 
       if (!existingUser.isEmailConfirmed) {
@@ -160,8 +162,19 @@ export class AuthService {
     }
   }
 
-  async registerUser(user: CreateUserDto) {
+  async registerUser(user: CreateUserDto, request?: any) {
     try {
+      // Detect country from IP address if request is provided
+      if (request && !user.country) {
+        const ip = this.geolocationService.getIpFromRequest(request);
+        if (ip) {
+          const country = this.geolocationService.getCountryFromIp(ip);
+          if (country) {
+            user.country = country;
+          }
+        }
+      }
+
       const newUser = await this.usersService.create(user);
 
       return newUser;

@@ -39,6 +39,9 @@ export class User {
   @Column({ nullable: true, length: 450 })
   image: string;
 
+  @Column({ length: 2, nullable: true })
+  country: string;
+
   @Column({ length: 1000, nullable: true })
   @Exclude({ toPlainOnly: true })
   mobileToken: string;

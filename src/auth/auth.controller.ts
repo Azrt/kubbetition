@@ -44,10 +44,11 @@ export class AuthController {
   @Post("google/login")
   async googleTokenLogin(
     @Body() params: GoogleLoginDto,
+    @Req() req,
     @Res() res: Response
   ): Promise<any> {
     try {
-      const user = await this.authService.googleTokenLogin(params.token);
+      const user = await this.authService.googleTokenLogin(params.token, req);
       const tokens = this.authService.generateTokens(user);
 
       const data = {
