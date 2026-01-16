@@ -152,7 +152,23 @@ export class TeamRequestsService {
     return this.teamRequestsRepository.save(updatedTeamRequest);
   }
 
-  remove(id: number) {
+  async remove(id: number, user: User) {
+    const teamRequest = await this.findOne(id);
+
+    if (!teamRequest) {
+      throw new BadRequestException("Team request not found");
+    }
+
+    const isAdmin = isAdminRole(user);
+    const isCreator = teamRequest.user.id === user.id;
+    const isPending = teamRequest.status === TeamRequestStatus.IN_PROGRESS;
+
+    if (!isAdmin && (!isCreator || (isCreator && !isPending))) {
+      throw new BadRequestException(
+        "You can only delete team requests that you created or are pending"
+      );
+    }
+
     return this.teamRequestsRepository.delete({ id });
   }
 }

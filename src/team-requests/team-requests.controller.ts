@@ -61,7 +61,10 @@ export class TeamRequestsController {
 
   @Delete(":teamRequestId")
   @IncludeAdminRoles()
-  remove(@Param() params: TeamRequestParamDto) {
-    return this.teamRequestsService.remove(+params.teamRequestId);
+  remove(
+    @Param() params: TeamRequestParamDto,
+    @CurrentUser() user: User
+  ) {
+    return this.teamRequestsService.remove(+params.teamRequestId, user);
   }
 }
