@@ -3,6 +3,7 @@ import { Game } from "./entities/game.entity";
 
 export const GAME_RELATIONS = [
   "createdBy",
+  "participants",
   "team1Members",
   "team1Members.team",
   "team2Members",

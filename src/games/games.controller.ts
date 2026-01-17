@@ -93,9 +93,10 @@ export class GamesController {
   @UseInterceptors(BodyContextInterceptor)
   async update(
     @Param("gameId") gameId: string,
-    @Body() updateGameDto: UpdateGameDto
+    @Body() updateGameDto: UpdateGameDto,
+    @CurrentUser() currentUser: User
   ) {
-    const game = await this.gamesService.update(+gameId, updateGameDto);
+    const game = await this.gamesService.update(+gameId, updateGameDto, currentUser);
   
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -132,6 +133,11 @@ export class GamesController {
     @Param() params: JoinTeamParamsDto,
     @CurrentUser() user: User
   ) {
+    console.log('Team joining - Raw params:', params);
+    console.log('Team joining - gameId (raw):', params.gameId, 'gameId (converted):', +params.gameId);
+    console.log('Team joining - team (raw):', params.team, 'team (converted):', +params.team, 'team (as 1|2):', +params.team as 1 | 2);
+    console.log('Team joining - user:', user.id, user.email);
+
     const game = await this.gamesService.joinTeam(
       +params.gameId,
       +params.team as 1 | 2,

@@ -1,9 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
@@ -12,6 +12,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { GameReadyEvent, GAME_READY_EVENT } from './events/game-ready.event';
 import { GameUpdateEvent, GAME_UPDATE_EVENT } from './events/game-update.event';
 import { RedisService } from 'src/common/services/redis.service';
+import { isAdminRole } from 'src/common/helpers/user';
 
 const HISTORY_CACHE_TTL = 300000; // 5 minutes in ms
 
@@ -34,6 +35,7 @@ export class GamesService implements GamesServiceInterface {
       createdBy: currentUser,
       team1Members: [],
       team2Members: [],
+      participants: [],
       team1Score: null,
       team2Score: null,
       team1Ready: false,
@@ -41,6 +43,14 @@ export class GamesService implements GamesServiceInterface {
     });
 
     const savedGame = await this.gamesRepository.save(game);
+
+    // Load and assign participants if provided
+    if (participants && participants.length > 0) {
+      const participantUsers = await this.usersRepository.findBy({ id: In(participants) });
+      savedGame.participants = participantUsers;
+      await this.gamesRepository.save(savedGame);
+    }
+
     return this.findOne(savedGame.id);
   }
 
@@ -100,11 +110,40 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(id);
   }
 
-  update(id: number, updateGameDto: UpdateGameDto) {
-    return this.gamesRepository.save({
+  async update(id: number, updateGameDto: UpdateGameDto, user: User) {
+    const game = await this.findOne(id);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    // Check if trying to update team members
+    const isUpdatingTeamMembers = 
+      (updateGameDto as any).team1Members !== undefined || 
+      (updateGameDto as any).team2Members !== undefined;
+
+    if (isUpdatingTeamMembers) {
+      // Authorization check: only admin/superadmin or participants can update team members
+      if (!this.canUpdateTeamMembers(game, user)) {
+        throw new ForbiddenException('You are not authorized to update team members. Only admins or participants can update team members.');
+      }
+    }
+
+    // Handle participants separately if provided
+    const { participants, ...updateData } = updateGameDto as any;
+    const gameUpdate: any = {
       id,
-      ...updateGameDto,
-    });
+      ...updateData,
+    };
+
+    // If participants are provided, load the User entities
+    if (participants && Array.isArray(participants)) {
+      const participantUsers = await this.usersRepository.findBy({ id: In(participants) });
+      gameUpdate.participants = participantUsers;
+    }
+
+    const savedGame = await this.gamesRepository.save(gameUpdate);
+    return this.findOne(savedGame.id);
   }
 
   remove(id: number) {
@@ -115,8 +154,7 @@ export class GamesService implements GamesServiceInterface {
     const games = await this.gamesRepository.find({
       relations: GAME_RELATIONS,
       where: [
-        { endTime: IsNull(), team1Members: { id: user?.id } },
-        { endTime: IsNull(), team2Members: { id: user?.id } },
+        { endTime: IsNull(), participants: { id: user?.id } },
       ],
     });
 
@@ -172,6 +210,11 @@ export class GamesService implements GamesServiceInterface {
 
     if (!game) {
       throw new NotFoundException('Game not found');
+    }
+
+    // Authorization check: only admin/superadmin or participants can add members to teams
+    if (!this.canUpdateTeamMembers(game, user)) {
+      throw new ForbiddenException('You are not authorized to join teams in this game. Only admins or participants can join teams.');
     }
 
     const teamKey = team === 1 ? 'team1Members' : 'team2Members';
@@ -231,12 +274,12 @@ export class GamesService implements GamesServiceInterface {
       throw new NotFoundException('Game not found');
     }
 
-    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
-    const isInTeam = teamMembers?.some(m => m.id === user.id);
-
-    if (!isInTeam) {
-      throw new BadRequestException('User not in this team');
+    // Authorization check: only admin/superadmin or team members can update their team's ready status
+    if (!this.canUpdateTeamReady(game, team, user)) {
+      throw new ForbiddenException('You are not authorized to update this team\'s ready status');
     }
+
+    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
 
     // Check team has required members
     if (teamMembers.length !== game.type) {
@@ -265,6 +308,11 @@ export class GamesService implements GamesServiceInterface {
       throw new NotFoundException('Game not found');
     }
 
+    // Authorization check: only admin/superadmin or team members can update their team's score
+    if (!this.canUpdateTeamScore(game, team, user)) {
+      throw new ForbiddenException('You are not authorized to update this team\'s score');
+    }
+
     if (!game.isGameReady) {
       throw new BadRequestException('Game is not ready yet');
     }
@@ -275,13 +323,6 @@ export class GamesService implements GamesServiceInterface {
 
     if (game.isCancelled) {
       throw new BadRequestException('Game is cancelled');
-    }
-
-    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
-    const isInTeam = teamMembers?.some(m => m.id === user.id);
-
-    if (!isInTeam) {
-      throw new BadRequestException('User not in this team');
     }
 
     const scoreKey = team === 1 ? 'team1Score' : 'team2Score';
@@ -297,6 +338,42 @@ export class GamesService implements GamesServiceInterface {
     }
 
     return updatedGame;
+  }
+
+  // Authorization helpers
+  private canUpdateTeamMembers(game: Game, user: User): boolean {
+    // Admin or superadmin can always update
+    if (isAdminRole(user)) {
+      return true;
+    }
+
+    // Check if user is in participants list
+    const isParticipant = game.participants?.some(p => p.id === user.id);
+    return isParticipant || false;
+  }
+
+  private canUpdateTeamScore(game: Game, team: 1 | 2, user: User): boolean {
+    // Admin or superadmin can always update
+    if (isAdminRole(user)) {
+      return true;
+    }
+
+    // Check if user is in the specified team
+    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
+    const isInTeam = teamMembers?.some(m => m.id === user.id);
+    return isInTeam || false;
+  }
+
+  private canUpdateTeamReady(game: Game, team: 1 | 2, user: User): boolean {
+    // Admin or superadmin can always update
+    if (isAdminRole(user)) {
+      return true;
+    }
+
+    // Check if user is in the specified team
+    const teamMembers = team === 1 ? game.team1Members : game.team2Members;
+    const isInTeam = teamMembers?.some(m => m.id === user.id);
+    return isInTeam || false;
   }
 
   // Helper to compute properties after loading

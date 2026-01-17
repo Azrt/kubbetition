@@ -14,6 +14,14 @@ export class Game extends Common {
   @ManyToOne(() => User, (user) => user.createdGames, { nullable: true })
   createdBy: User;
 
+  @ManyToMany(() => User)
+  @JoinTable({
+    name: "game_participants",
+    joinColumn: { name: "game_id", referencedColumnName: "id" },
+    inverseJoinColumn: { name: "participant_id", referencedColumnName: "id" },
+  })
+  participants: User[];
+
   @Column({ type: "bool", default: false })
   isCancelled: boolean;
 
