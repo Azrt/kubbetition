@@ -4,7 +4,9 @@ import { User } from 'src/users/entities/user.entity';
 import {
   Column,
   Entity,
+  ManyToOne,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 
 @Entity()
@@ -31,4 +33,9 @@ export class Team extends Common {
     cascade: true,
   })
   teamRequests: Array<TeamRequest>;
+
+  @ManyToOne(() => User, {
+    nullable: false,
+  })
+  createdBy: User;
 }

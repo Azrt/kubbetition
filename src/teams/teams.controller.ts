@@ -43,7 +43,7 @@ export class TeamsController {
     return this.teamsService.findAll(query);
   }
 
-  @Get("my")
+  @Get("me")
   getMyTeam(@CurrentUser() user: User) {
     return this.teamsService.getMyTeam(user);
   }
@@ -68,7 +68,7 @@ export class TeamsController {
   @Delete(":teamId")
   @UseGuards(SameTeamGuard)
   @IncludeAdminRoles(Role.SUPERVISOR)
-  remove(@Param("teamId") teamId: string) {
-    return this.teamsService.remove(+teamId);
+  remove(@Param("teamId") teamId: string, @CurrentUser() user: User) {
+    return this.teamsService.remove(+teamId, user);
   }
 }

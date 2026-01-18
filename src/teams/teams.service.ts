@@ -34,7 +34,10 @@ export class TeamsService {
     await queryRunner.startTransaction();
 
     try {
-      const teamData = this.teamsRepository.create(createTeamDto);
+      const teamData = this.teamsRepository.create({
+        ...createTeamDto,
+        createdBy: user,
+      });
 
       const team = await queryRunner.manager.save(teamData);
 
@@ -49,6 +52,8 @@ export class TeamsService {
       }
 
       await queryRunner.commitTransaction();
+      
+      return team;
     } catch (e) {
       await queryRunner.rollbackTransaction();
 
@@ -89,7 +94,25 @@ export class TeamsService {
     return this.teamsRepository.save(team);
   }
 
-  remove(id: number) {
+  async remove(id: number, user: User) {
+    const team = await this.teamsRepository.findOne({
+      where: { id },
+      relations: ['createdBy'],
+    });
+
+    if (!team) {
+      throw new BadRequestException('Team not found');
+    }
+
+    const isAdmin = user.role === Role.ADMIN || user.role === Role.SUPERADMIN;
+    const isCreator = team.createdBy.id === user.id;
+
+    if (!isAdmin && !isCreator) {
+      throw new BadRequestException(
+        'Only admin, superadmin, or team creator can delete a team'
+      );
+    }
+
     return this.teamsRepository.delete({ id });
   }
 }
