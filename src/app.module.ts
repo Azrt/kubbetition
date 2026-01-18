@@ -22,6 +22,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { configValidationSchema } from './app.config-schema';
 import { FirebaseModule } from './common/modules/firebase.module';
 import { RedisModule } from './common/modules/redis.module';
+import { CountriesModule } from './countries/countries.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { RedisModule } from './common/modules/redis.module';
     TeamsModule,
     GamesModule,
     TeamRequestsModule,
+    CountriesModule,
   ],
   controllers: [AppController],
   providers: [AppService, GoogleStrategy],

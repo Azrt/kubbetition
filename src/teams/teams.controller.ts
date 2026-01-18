@@ -24,6 +24,7 @@ import { SameTeamGuard } from 'src/common/guards/same-team.guard';
 import { IncludeAdminRoles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/role.enum';
 import { EmptyTeamGuard } from 'src/common/guards/empty-team.guard';
+import { AuthGuard } from '@nestjs/passport';
 
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("teams")
@@ -40,6 +41,11 @@ export class TeamsController {
   @PaginatedSwaggerDocs(CreateTeamDto, TEAMS_PAGINATION_CONFIG)
   findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Team>> {
     return this.teamsService.findAll(query);
+  }
+
+  @Get("my")
+  getMyTeam(@CurrentUser() user: User) {
+    return this.teamsService.getMyTeam(user);
   }
 
   @Get(":teamId")

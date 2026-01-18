@@ -44,6 +44,7 @@
     "cache-manager-redis-yet": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "country-list": "^2.4.1",
     "firebase-admin": "^12.2.0",
     "geoip-lite": "^1.4.10",
     "google-auth-library": "^9.4.2",

@@ -58,6 +58,13 @@ export class TeamsService {
     }
   }
 
+  getMyTeam(user: User) {
+    return this.teamsRepository.findOne({
+      relations: ["members"],
+      where: { id: user.team?.id },
+    });
+  }
+
   findAll(query?: PaginateQuery) {
     return paginate(query, this.teamsRepository, TEAMS_PAGINATION_CONFIG);
   }
