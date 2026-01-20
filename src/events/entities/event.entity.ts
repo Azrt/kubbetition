@@ -41,6 +41,12 @@ export class Event extends Common {
   @Column({ type: "point", nullable: true })
   location: string;
 
+  @Column({ type: "int", nullable: true })
+  roundDuration: number;
+
+  @Column({ type: "bool", default: false })
+  tournamentMode: boolean;
+
   @Column({ type: "timestamptz" })
   startTime: Date;
 

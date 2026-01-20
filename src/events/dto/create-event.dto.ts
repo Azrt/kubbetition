@@ -78,6 +78,27 @@ export class CreateEventDto {
   location?: string;
 
   @ApiProperty({
+    description: 'Duration for each round game in minutes',
+    example: 20,
+    required: false,
+    minimum: 5,
+    maximum: 60,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(60)
+  roundDuration?: number;
+
+  @ApiProperty({
+    description: 'Enable tournament mode with ranking-based matchmaking',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  tournamentMode?: boolean;
+
+  @ApiProperty({
     description: 'Event start time',
     example: '2024-12-31T10:00:00Z',
   })

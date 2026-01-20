@@ -113,12 +113,23 @@ export class EventsService {
     event.currentRound = roundNumber;
     await this.eventsRepository.save(event);
 
-    // Generate matchups avoiding duplicates where possible
-    const matchups = this.generateMatchups(
-      event.participants,
-      event.games || [],
-      event.gameType,
+    // Get previous games (completed games from previous rounds)
+    const previousGames = (event.games || []).filter(
+      (game) => game.round !== null && game.round < roundNumber && game.team1Score !== null && game.team2Score !== null,
     );
+
+    // Generate matchups - use tournament mode if enabled and not round 1
+    const matchups = event.tournamentMode && roundNumber > 1
+      ? this.generateTournamentMatchups(
+          event.participants,
+          previousGames,
+          event.gameType,
+        )
+      : this.generateMatchups(
+          event.participants,
+          previousGames,
+          event.gameType,
+        );
 
     // Load all users
     const allParticipantIds = event.participants.flat();
@@ -126,6 +137,9 @@ export class EventsService {
       id: In(allParticipantIds),
     });
     const usersMap = new Map(users.map((u) => [u.id, u]));
+
+    // Determine game duration - use event.roundDuration or default to 20
+    const gameDuration = event.roundDuration ?? 20;
 
     // Create games for each matchup
     const games: Game[] = [];
@@ -140,7 +154,7 @@ export class EventsService {
 
       const game = this.gamesRepository.create({
         type: event.gameType,
-        duration: 20, // Default duration, can be made configurable
+        duration: gameDuration,
         team1Members,
         team2Members,
         participants: [...team1Members, ...team2Members],
@@ -164,7 +178,190 @@ export class EventsService {
   }
 
   /**
+   * Calculate team statistics from previous games
+   */
+  private calculateTeamStats(
+    team: Array<number>,
+    previousGames: Game[],
+  ): {
+    wins: number;
+    losses: number;
+    pointsFor: number;
+    pointsAgainst: number;
+    winRecord: number; // wins - losses
+    pointDifferential: number; // pointsFor - pointsAgainst
+  } {
+    let wins = 0;
+    let losses = 0;
+    let pointsFor = 0;
+    let pointsAgainst = 0;
+
+    // Helper to check if two teams are exactly the same
+    const areTeamsEqual = (team1: Array<number>, team2: Array<number>): boolean => {
+      if (team1.length !== team2.length) return false;
+      const sorted1 = [...team1].sort();
+      const sorted2 = [...team2].sort();
+      return sorted1.every((id, idx) => id === sorted2[idx]);
+    };
+
+    for (const game of previousGames) {
+      if (!game.team1Members || !game.team2Members || game.team1Score === null || game.team2Score === null) {
+        continue;
+      }
+
+      const team1Ids = game.team1Members.map((u) => u.id);
+      const team2Ids = game.team2Members.map((u) => u.id);
+
+      // Check if this team matches team1
+      const isTeam1 = areTeamsEqual(team, team1Ids);
+      const isTeam2 = areTeamsEqual(team, team2Ids);
+
+      if (isTeam1) {
+        pointsFor += game.team1Score;
+        pointsAgainst += game.team2Score;
+        if (game.team1Score > game.team2Score) {
+          wins++;
+        } else if (game.team1Score < game.team2Score) {
+          losses++;
+        }
+      } else if (isTeam2) {
+        pointsFor += game.team2Score;
+        pointsAgainst += game.team1Score;
+        if (game.team2Score > game.team1Score) {
+          wins++;
+        } else if (game.team2Score < game.team1Score) {
+          losses++;
+        }
+      }
+    }
+
+    return {
+      wins,
+      losses,
+      pointsFor,
+      pointsAgainst,
+      winRecord: wins - losses,
+      pointDifferential: pointsFor - pointsAgainst,
+    };
+  }
+
+  /**
+   * Generate tournament-style matchups based on team performance
+   * Teams are ranked by win record, then by point differential
+   * Similar-ranked teams are matched together (Swiss-style)
+   */
+  private generateTournamentMatchups(
+    participants: Array<Array<number>>,
+    previousGames: Game[],
+    gameType: GameType,
+  ): Array<[Array<number>, Array<number>]> {
+    const matchups: Array<[Array<number>, Array<number>]> = [];
+
+    // Calculate statistics for each team
+    interface TeamWithStats {
+      team: Array<number>;
+      stats: ReturnType<typeof this.calculateTeamStats>;
+      index: number;
+    }
+
+    const teamsWithStats: TeamWithStats[] = participants.map((team, index) => ({
+      team,
+      stats: this.calculateTeamStats(team, previousGames),
+      index,
+    }));
+
+    // Sort teams by ranking (win record desc, then point differential desc)
+    teamsWithStats.sort((a, b) => {
+      // Primary sort: win record
+      if (a.stats.winRecord !== b.stats.winRecord) {
+        return b.stats.winRecord - a.stats.winRecord;
+      }
+      // Secondary sort: point differential
+      if (a.stats.pointDifferential !== b.stats.pointDifferential) {
+        return b.stats.pointDifferential - a.stats.pointDifferential;
+      }
+      // Tertiary sort: points for
+      return b.stats.pointsFor - a.stats.pointsFor;
+    });
+
+    // Build a map of previous matchups
+    const previousMatchups = new Set<string>();
+    for (const game of previousGames) {
+      if (game.team1Members && game.team2Members) {
+        const team1Ids = game.team1Members.map((u) => u.id).sort().join(',');
+        const team2Ids = game.team2Members.map((u) => u.id).sort().join(',');
+        previousMatchups.add(`${team1Ids}|${team2Ids}`);
+        previousMatchups.add(`${team2Ids}|${team1Ids}`);
+      }
+    }
+
+    const getMatchupKey = (team1: Array<number>, team2: Array<number>): string => {
+      const team1Sorted = [...team1].sort().join(',');
+      const team2Sorted = [...team2].sort().join(',');
+      return `${team1Sorted}|${team2Sorted}`;
+    };
+
+    const havePlayedBefore = (team1: Array<number>, team2: Array<number>): boolean => {
+      return previousMatchups.has(getMatchupKey(team1, team2));
+    };
+
+    // Match teams with similar rankings, avoiding duplicates where possible
+    const remainingTeams = [...teamsWithStats];
+
+    while (remainingTeams.length > 1) {
+      // Try to find best available opponent for the first team
+      let bestOpponentIndex: number | null = null;
+      const currentTeam = remainingTeams[0];
+
+      // Look for an opponent with similar ranking (preferably same win record)
+      for (let i = 1; i < remainingTeams.length; i++) {
+        const opponent = remainingTeams[i];
+
+        // Prefer opponents with same win record
+        const sameWinRecord = opponent.stats.winRecord === currentTeam.stats.winRecord;
+        const notPlayedBefore = !havePlayedBefore(currentTeam.team, opponent.team);
+
+        // Priority: same win record + haven't played before
+        if (sameWinRecord && notPlayedBefore) {
+          bestOpponentIndex = i;
+          break;
+        }
+
+        // Fallback: haven't played before
+        if (!bestOpponentIndex && notPlayedBefore) {
+          bestOpponentIndex = i;
+        }
+
+        // Last resort: any opponent
+        if (!bestOpponentIndex && i === 1) {
+          bestOpponentIndex = i;
+        }
+      }
+
+      if (bestOpponentIndex === null) {
+        // Should not happen, but handle edge case
+        break;
+      }
+
+      const opponent = remainingTeams[bestOpponentIndex];
+      matchups.push([currentTeam.team, opponent.team]);
+
+      // Remove matched teams (remove higher index first)
+      remainingTeams.splice(bestOpponentIndex, 1);
+      remainingTeams.splice(0, 1);
+    }
+
+    // If there's one team left with odd number of teams, it sits out this round
+    if (remainingTeams.length === 1) {
+      // Optional: log or handle the bye
+    }
+
+    return matchups;
+  }
+
+  /**
    * Generate matchups for a round, avoiding duplicate matchups where possible
+   * Used for round 1 or non-tournament mode
    * @param participants Array of participant teams (each team is an array of user IDs)
    * @param previousGames Previous games played in this event
    * @param gameType The game type (team size)
