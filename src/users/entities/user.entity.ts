@@ -47,7 +47,6 @@ export class User {
   mobileToken: string;
 
   @ManyToOne(() => Team, (team) => team.members, {
-    cascade: true,
     nullable: true,
   })
   @JoinColumn()

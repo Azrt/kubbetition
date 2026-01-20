@@ -25,6 +25,7 @@ export class Team extends Common {
 
   @OneToMany(() => User, (user) => user.team, {
     nullable: true,
+    cascade: true,
   })
   members: Array<User>;
 

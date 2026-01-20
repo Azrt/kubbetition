@@ -2,6 +2,7 @@ import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
 import { User } from "src/users/entities/user.entity";
 import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from "typeorm";
+import { Event as EventEntity } from "src/events/entities/event.entity";
 
 @Entity()
 export class Game extends Common {
@@ -72,4 +73,10 @@ export class Game extends Common {
   isGameReady: boolean;
   winner: 1 | 2 | null;
   allMembers: User[];
+
+  @ManyToOne(() => EventEntity, (event) => event.games, { nullable: true })
+  event: EventEntity;
+
+  @Column({ type: "int", nullable: true })
+  round: number | null;
 }
