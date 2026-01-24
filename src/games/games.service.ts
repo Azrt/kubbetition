@@ -77,17 +77,54 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(id);
   }
 
-  findAll(query?: PaginateQuery) {
-    return paginate(query, this.gamesRepository, GAMES_PAGINATION_CONFIG);
+  private eventParticipantWhereClause(): string {
+    // Checks whether event.participants (json) contains userId in any inner team array.
+    // Assumes Postgres jsonb.
+    return `EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) elem
+      WHERE elem @> jsonb_build_array(:userId)
+    )`;
   }
 
-  async findOne(id: number) {
+  findAll(query: PaginateQuery, currentUser: User) {
+    const qb = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.participants', 'participants')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.event', 'event');
+
+    if (!isAdminRole(currentUser)) {
+      qb.andWhere(
+        `(event.id IS NULL OR event.isPublic = true OR ${this.eventParticipantWhereClause()})`,
+        { userId: currentUser.id },
+      );
+    }
+
+    return paginate(query, qb, {
+      ...GAMES_PAGINATION_CONFIG,
+      relations: undefined,
+    } as any);
+  }
+
+  async findOne(id: number, currentUser?: User) {
     const game = await this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
       where: { id },
     });
 
     if (game) {
+      if (game.event && game.event.isPublic === false && currentUser && !isAdminRole(currentUser)) {
+        const teams = game.event.participants || [];
+        const isParticipant = teams.some((t) => Array.isArray(t) && t.includes(currentUser.id));
+        if (!isParticipant) {
+          throw new ForbiddenException('You are not allowed to access this game');
+        }
+      }
       this.computeGameProperties(game);
     }
 

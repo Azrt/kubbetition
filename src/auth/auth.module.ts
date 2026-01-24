@@ -56,6 +56,6 @@ const globalGuards = [
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(JwtMiddleware).forRoutes("*");
+    consumer.apply(JwtMiddleware).forRoutes("/me");
   }
 }

@@ -58,8 +58,9 @@ export class GamesController {
   @Get()
   async findAll(
     @Paginate() query: PaginateQuery,
+    @CurrentUser() currentUser: User,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findAll(query);
+    return this.gamesService.findAll(query, currentUser);
   }
 
   @Get("active")
@@ -85,8 +86,11 @@ export class GamesController {
 
   @Get(":gameId")
   @UseInterceptors(NotFoundInterceptor)
-  findOne(@Param("gameId") gameId: string) {
-    return this.gamesService.findOne(+gameId);
+  findOne(
+    @Param("gameId") gameId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.gamesService.findOne(+gameId, currentUser);
   }
 
   @Patch(":gameId")

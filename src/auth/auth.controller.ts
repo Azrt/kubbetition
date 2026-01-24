@@ -16,7 +16,10 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
+import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

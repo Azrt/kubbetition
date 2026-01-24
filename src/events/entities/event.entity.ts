@@ -25,6 +25,9 @@ export class Event extends Common {
   @Column({ length: 500 })
   details: string;
 
+  @Column({ type: 'bool', default: true })
+  isPublic: boolean;
+
   @Column({
     type: "enum",
     enum: GameType,
@@ -46,6 +49,13 @@ export class Event extends Common {
 
   @Column({ type: "bool", default: false })
   tournamentMode: boolean;
+
+  /**
+   * Last moment users are allowed to join this event.
+   * Must be <= startTime. If null, startTime is used as the join deadline.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  joiningTime: Date | null;
 
   @Column({ type: "timestamptz" })
   startTime: Date;

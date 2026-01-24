@@ -6,68 +6,208 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Event } from './entities/event.entity';
+import { Event as EventEntity } from './entities/event.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Game } from 'src/games/entities/game.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { StartRoundDto } from './dto/start-round.dto';
 import { GameType } from 'src/common/enums/gameType';
+import { isAdminRole } from 'src/common/helpers/user';
+import { UpdateEventDto } from './dto/update-event.dto';
+import { FriendRequest } from 'src/users/entities/friend-request.entity';
+import { FriendRequestStatus } from 'src/users/enums/friend-request-status.enum';
 
 @Injectable()
 export class EventsService {
   constructor(
-    @InjectRepository(Event)
-    private eventsRepository: Repository<Event>,
+    @InjectRepository(EventEntity)
+    private eventsRepository: Repository<EventEntity>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(Game)
     private gamesRepository: Repository<Game>,
+    @InjectRepository(FriendRequest)
+    private friendRequestsRepository: Repository<FriendRequest>,
   ) {}
 
-  async create(createEventDto: CreateEventDto, currentUser: User): Promise<Event> {
-    const { participants, gameType, rounds, startTime, ...rest } = createEventDto;
+  private isParticipant(event: EventEntity, userId: number): boolean {
+    const teams = event.participants || [];
+    return teams.some((team) => Array.isArray(team) && team.includes(userId));
+  }
 
-    // Validate participants structure matches game type
-    const teamSize = gameType;
-    for (const team of participants) {
-      if (team.length !== teamSize) {
-        throw new BadRequestException(
-          `Each team must have exactly ${teamSize} participants for ${gameType}v${gameType} game type`,
-        );
+  async join(eventId: number, team: number[], currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // No joining once games started (currentRound > 0)
+    if ((event.currentRound ?? 0) > 0) {
+      throw new BadRequestException('Cannot join: event already started');
+    }
+
+    const now = new Date();
+    const joinDeadline = event.joiningTime ?? event.startTime;
+    if (joinDeadline && now.getTime() > new Date(joinDeadline).getTime()) {
+      throw new BadRequestException('Cannot join: joining time has passed');
+    }
+
+    if (team.length === 0) {
+      throw new BadRequestException('Team cannot be empty');
+    }
+
+    // Load current user with team and members relation
+    const userWithTeam = await this.usersRepository.findOne({
+      where: { id: currentUser.id },
+      relations: ['team', 'team.members'],
+    });
+
+    // Get all accepted friend requests where user is either requester or recipient
+    const friendRequests = await this.friendRequestsRepository.find({
+      where: [
+        {
+          status: FriendRequestStatus.ACCEPTED,
+          requester: { id: currentUser.id },
+        },
+        {
+          status: FriendRequestStatus.ACCEPTED,
+          recipient: { id: currentUser.id },
+        },
+      ],
+      relations: ['requester', 'recipient'],
+    });
+
+    // Extract friend user IDs from friend requests
+    const friendIds = new Set<number>();
+    for (const request of friendRequests) {
+      if (request.requester.id === currentUser.id) {
+        friendIds.add(request.recipient.id);
+      } else {
+        friendIds.add(request.requester.id);
       }
     }
 
-    // Validate all participants exist
-    const allParticipantIds = participants.flat();
-    const uniqueParticipantIds = [...new Set(allParticipantIds)];
-    const existingUsers = await this.usersRepository.findBy({
-      id: In(uniqueParticipantIds),
-    });
+    // Get team member IDs (excluding current user)
+    const teamMemberIds = new Set<number>();
+    if (userWithTeam?.team?.members) {
+      for (const member of userWithTeam.team.members) {
+        if (member.id !== currentUser.id) {
+          teamMemberIds.add(member.id);
+        }
+      }
+    }
 
-    if (existingUsers.length !== uniqueParticipantIds.length) {
-      const foundIds = existingUsers.map((u) => u.id);
-      const missingIds = uniqueParticipantIds.filter((id) => !foundIds.includes(id));
+    // Combine friends and team members into one set
+    const allowedUserIds = new Set([...friendIds, ...teamMemberIds]);
+
+    // Validate that all team members (excluding current user) are either friends or team members
+    const otherTeamMembers = team.filter((teamMember) => teamMember !== currentUser.id);
+    const invalidMembers = otherTeamMembers.filter((memberId) => !allowedUserIds.has(memberId));
+
+    if (invalidMembers.length > 0) {
       throw new BadRequestException(
-        `Participants with IDs ${missingIds.join(', ')} do not exist`,
+        `Team members with IDs ${invalidMembers.join(', ')} must be friends or team members`,
       );
     }
 
-    // Validate minimum number of teams (at least 2)
-    if (participants.length < 2) {
-      throw new BadRequestException('At least 2 teams are required for an event');
+    if (event.participants?.some((participant) => participant.some((member) => team.includes(member)))) {
+      throw new BadRequestException('Team members already participating in this event');
+    }
+
+    // Validate team size
+    if (!Array.isArray(team) || team.length !== event.gameType) {
+      throw new BadRequestException(
+        `Team must have exactly ${event.gameType} participants for ${event.gameType}v${event.gameType} game type`,
+      );
+    }
+
+    const uniqueTeamIds = [...new Set(team)];
+    if (uniqueTeamIds.length !== team.length) {
+      throw new BadRequestException('Team cannot contain duplicate user IDs');
+    }
+
+    // Validate users exist
+    const users = await this.usersRepository.findBy({ id: In(uniqueTeamIds) });
+    if (users.length !== uniqueTeamIds.length) {
+      const foundIds = users.map((u) => u.id);
+      const missingIds = uniqueTeamIds.filter((id) => !foundIds.includes(id));
+      throw new BadRequestException(`Participants with IDs ${missingIds.join(', ')} do not exist`);
+    }
+
+    // Prevent users already in event from joining again
+    const existingIds = new Set((event.participants || []).flat());
+    const duplicates = uniqueTeamIds.filter((id) => existingIds.has(id));
+    if (duplicates.length) {
+      throw new BadRequestException(
+        `Users already participating in this event: ${duplicates.join(', ')}`,
+      );
+    }
+
+    event.participants = [...(event.participants || []), uniqueTeamIds];
+    return this.eventsRepository.save(event);
+  }
+
+  async update(eventId: number, updateEventDto: UpdateEventDto, currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+    
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+    if (event.createdBy.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only the event creator can update the event');
+    }
+
+    const updatedEvent = this.eventsRepository.create({
+      ...event,
+      ...updateEventDto,
+    });
+
+    try {
+      updatedEvent.joiningTime = updateEventDto.joiningTime ? new Date(updateEventDto.joiningTime) : event.joiningTime;
+    } catch (error) {
+      throw new BadRequestException('Invalid joiningTime');
+    }
+
+    try {
+      updatedEvent.startTime = updateEventDto.startTime ? new Date(updateEventDto.startTime) : event.startTime;
+    } catch (error) {
+      throw new BadRequestException('Invalid startTime');
+    }
+
+    return this.eventsRepository.save(updatedEvent);
+  }
+
+  async create(createEventDto: CreateEventDto, currentUser: User): Promise<EventEntity> {
+    const { gameType, rounds, startTime, joiningTime, isPublic, ...rest } = createEventDto as any;
+
+    const start = new Date(startTime);
+    const joining = joiningTime ? new Date(joiningTime) : null;
+    if (joining && joining.getTime() > start.getTime()) {
+      throw new BadRequestException('joiningTime must be less than or equal to startTime');
     }
 
     const event = this.eventsRepository.create({
       ...rest,
-      participants,
+      // By default event starts with no participants; participants can only join via /events/:id/join.
+      participants: [],
+      isPublic: isPublic ?? true,
       gameType,
       rounds,
       currentRound: 0,
-      startTime: new Date(startTime),
+      joiningTime: joining,
+      startTime: start,
       createdBy: currentUser,
     });
 
-    return this.eventsRepository.save(event);
+    const savedEvent = await this.eventsRepository.save(event);
+    return Array.isArray(savedEvent) ? savedEvent[0] : savedEvent;
   }
 
   async startRound(eventId: number, startRoundDto: StartRoundDto, currentUser: User): Promise<Game[]> {
@@ -109,6 +249,28 @@ export class EventsService {
       );
     }
 
+    // Validate participants exist and match game type before starting round
+    const participants = event.participants || [];
+    if (participants.length < 2) {
+      throw new BadRequestException('At least 2 teams are required for an event');
+    }
+    const teamSize = event.gameType;
+    for (const team of participants) {
+      if (!Array.isArray(team) || team.length !== teamSize) {
+        throw new BadRequestException(
+          `Each team must have exactly ${teamSize} participants for ${teamSize}v${teamSize} game type`,
+        );
+      }
+    }
+    const allIds = participants.flat();
+    const uniqueIds = [...new Set(allIds)];
+    const existingUsers = await this.usersRepository.findBy({ id: In(uniqueIds) });
+    if (existingUsers.length !== uniqueIds.length) {
+      const foundIds = existingUsers.map((u) => u.id);
+      const missingIds = uniqueIds.filter((id) => !foundIds.includes(id));
+      throw new BadRequestException(`Participants with IDs ${missingIds.join(', ')} do not exist`);
+    }
+
     // Update current round
     event.currentRound = roundNumber;
     await this.eventsRepository.save(event);
@@ -121,18 +283,18 @@ export class EventsService {
     // Generate matchups - use tournament mode if enabled and not round 1
     const matchups = event.tournamentMode && roundNumber > 1
       ? this.generateTournamentMatchups(
-          event.participants,
+          participants,
           previousGames,
           event.gameType,
         )
       : this.generateMatchups(
-          event.participants,
+          participants,
           previousGames,
           event.gameType,
         );
 
     // Load all users
-    const allParticipantIds = event.participants.flat();
+    const allParticipantIds = participants.flat();
     const users = await this.usersRepository.findBy({
       id: In(allParticipantIds),
     });
@@ -468,7 +630,7 @@ export class EventsService {
     return matchups;
   }
 
-  async findOne(id: number): Promise<Event> {
+  async findOne(id: number): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id },
       relations: ['createdBy', 'games'],
@@ -481,9 +643,120 @@ export class EventsService {
     return event;
   }
 
-  async findAll(): Promise<Event[]> {
-    return this.eventsRepository.find({
+  async findOneVisible(id: number, currentUser: User): Promise<EventEntity> {
+    const event = await this.findOne(id);
+    if (event.isPublic) return event;
+    if (isAdminRole(currentUser)) return event;
+    if (this.isParticipant(event, currentUser.id)) return event;
+    throw new ForbiddenException('You are not allowed to access this event');
+  }
+
+  async findAllVisible(currentUser: User): Promise<EventEntity[]> {
+    const events = await this.eventsRepository.find({
       relations: ['createdBy', 'games'],
     });
+
+    if (isAdminRole(currentUser)) return events;
+    return events.filter((e) => e.isPublic || this.isParticipant(e, currentUser.id));
+  }
+
+  async endRound(eventId: number, currentUser: User): Promise<Game[]> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Verify current user is admin, superadmin, or event creator
+    const isAuthorized = 
+      event.createdBy.id === currentUser.id || 
+      isAdminRole(currentUser);
+    
+    if (!isAuthorized) {
+      throw new ForbiddenException('Only admin, superadmin, or event creator can end rounds');
+    }
+
+    // Check if there's an active round
+    if (event.currentRound === 0 || event.currentRound === null) {
+      throw new BadRequestException('No active round to end');
+    }
+
+    // Get all games for the current round
+    const currentRoundGames = (event.games || []).filter(
+      (game) => game.round === event.currentRound && !game.isCancelled,
+    );
+
+    if (currentRoundGames.length === 0) {
+      throw new BadRequestException(`No games found for round ${event.currentRound}`);
+    }
+
+    const now = new Date();
+
+    // Update all games: set endTime, startTime (if null), ready flags, and null scores to 0
+    for (const game of currentRoundGames) {
+      game.endTime = now;
+      if (!game.startTime) {
+        game.startTime = now;
+      }
+      game.team1Ready = true;
+      game.team2Ready = true;
+      if (game.team1Score === null) {
+        game.team1Score = 0;
+      }
+      if (game.team2Score === null) {
+        game.team2Score = 0;
+      }
+    }
+
+    // Save all updated games
+    const savedGames = await this.gamesRepository.save(currentRoundGames);
+    return savedGames;
+  }
+
+  async getActiveGames(eventId: number, currentUser: User): Promise<Game[]> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check visibility
+    if (!event.isPublic && !isAdminRole(currentUser) && !this.isParticipant(event, currentUser.id)) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+
+    // Active games are games from the current round that haven't ended (endTime is null)
+    const activeGames = (event.games || []).filter(
+      (game) => 
+        game.round === event.currentRound && 
+        !game.isCancelled && 
+        game.endTime === null,
+    );
+
+    return activeGames;
+  }
+
+  async leave(eventId: number, currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+    
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    if (!this.isParticipant(event, currentUser.id) && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('You are not a participant of this event');
+    }
+
+    event.participants = event.participants?.filter((team) => !team.includes(currentUser.id));
+    return this.eventsRepository.save(event);
   }
 }

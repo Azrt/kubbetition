@@ -1,53 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsEnum,
-  IsInt,
-  Min,
-  Max,
-  IsDateString,
-  IsOptional,
-  IsBoolean,
-} from 'class-validator';
-import { GameType } from 'src/common/enums/gameType';
+import { ApiProperty } from "@nestjs/swagger";
+import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
 
-export class CreateEventDto {
-  @ApiProperty({ description: 'Event name', example: 'Summer Tournament' })
-  @IsString()
-  @IsNotEmpty()
-  name: string;
-
-  @ApiProperty({
-    description: 'Event image URL',
-    required: false,
-    example: 'https://example.com/image.jpg',
-  })
-  @IsOptional()
-  @IsString()
-  image?: string;
-
-  @ApiProperty({
-    description: 'Whether the event is publicly visible (non-admins can only see private events they participate in)',
-    required: false,
-    default: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isPublic?: boolean;
-
+export class UpdateEventDto {
   @ApiProperty({ description: 'Event details', example: 'Annual summer tournament' })
   @IsString()
   @IsNotEmpty()
-  details: string;
-
-  @ApiProperty({
-    description: 'Game type determining team size',
-    enum: GameType,
-    example: GameType.TwoVsTwo,
-  })
-  @IsEnum(GameType)
-  gameType: GameType;
+  @IsOptional()
+  details?: string;
 
   @ApiProperty({
     description: 'Number of rounds in the event',
@@ -58,7 +17,8 @@ export class CreateEventDto {
   @IsInt()
   @Min(1)
   @Max(20)
-  rounds: number;
+  @IsOptional()
+  rounds?: number;
 
   @ApiProperty({
     description: 'Event location (point)',
@@ -103,5 +63,6 @@ export class CreateEventDto {
     example: '2024-12-31T10:00:00Z',
   })
   @IsDateString()
-  startTime: string;
+  @IsOptional()
+  startTime?: string;
 }

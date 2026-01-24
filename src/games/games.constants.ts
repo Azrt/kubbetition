@@ -8,6 +8,7 @@ export const GAME_RELATIONS = [
   "team1Members.team",
   "team2Members",
   "team2Members.team",
+  "event",
 ];
 
 export const GAMES_PAGINATION_CONFIG: PaginateConfig<Game> = {
