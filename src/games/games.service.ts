@@ -81,14 +81,14 @@ export class GamesService implements GamesServiceInterface {
     // Checks whether event.participants (json) contains userId in any inner team array.
     // Assumes Postgres jsonb.
     // Use jsonb_array_elements_text to extract array elements as text, then cast and compare
-    // This avoids the parameter type inference issue with jsonb_build_array
+    // Cast :userId to INTEGER explicitly to avoid parameter type inference issues
     return `EXISTS (
       SELECT 1
       FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) team
       WHERE EXISTS (
         SELECT 1
         FROM jsonb_array_elements_text(team) user_id_text
-        WHERE user_id_text::int = :userId
+        WHERE user_id_text::int = CAST(:userId AS INTEGER)
       )
     )`;
   }
@@ -105,8 +105,14 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('game.event', 'event');
 
     if (!isAdminRole(currentUser)) {
+      // For regular users, filter by:
+      // 1. Games where user is in game.participants (ManyToMany relation)
+      // 2. OR public events where user is a participant
       qb.andWhere(
-        `(event.id IS NULL OR event.isPublic = true OR ${this.eventParticipantWhereClause()})`,
+        `(
+          participants.id = :userId 
+          OR (event.isPublic = true AND ${this.eventParticipantWhereClause()})
+        )`,
         { userId: currentUser.id },
       );
     }

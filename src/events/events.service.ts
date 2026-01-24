@@ -716,6 +716,37 @@ export class EventsService {
     return savedGames;
   }
 
+  async getGames(eventId: number, currentUser: User): Promise<Game[]> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members', 'games.participants'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check if user has access to the event
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    const isAdmin = isAdminRole(currentUser);
+    const isEventParticipant = this.isParticipant(event, currentUser.id);
+
+    if (!isAdmin && !isEventCreator && !isEventParticipant && !event.isPublic) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+
+    // If admin, superadmin, or event creator: return all games
+    if (isAdmin || isEventCreator) {
+      return event.games || [];
+    }
+
+    // If only a participant: return only games where currentUser was playing
+    // (user is in game.participants)
+    return (event.games || []).filter((game) =>
+      game.participants?.some((participant) => participant.id === currentUser.id),
+    );
+  }
+
   async getActiveGames(eventId: number, currentUser: User): Promise<Game[]> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },

@@ -51,6 +51,22 @@ export class EventsController {
     return this.eventsService.findAllVisible(req.user);
   }
 
+  @Get(':id/games')
+  @ApiOperation({ summary: 'Get all games of an event' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of games. Admins/creators see all games, participants see only their games',
+    type: [Game],
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getGames(
+    @Param('id', ParseIntPipe) eventId: number,
+    @Request() req: RequestWithUser,
+  ): Promise<Game[]> {
+    return this.eventsService.getGames(eventId, req.user);
+  }
+
   @Get(':id/games/active')
   @ApiOperation({ summary: 'Get active games of an event' })
   @ApiResponse({
