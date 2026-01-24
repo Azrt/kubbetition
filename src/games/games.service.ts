@@ -80,10 +80,16 @@ export class GamesService implements GamesServiceInterface {
   private eventParticipantWhereClause(): string {
     // Checks whether event.participants (json) contains userId in any inner team array.
     // Assumes Postgres jsonb.
+    // Use jsonb_array_elements_text to extract array elements as text, then cast and compare
+    // This avoids the parameter type inference issue with jsonb_build_array
     return `EXISTS (
       SELECT 1
-      FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) elem
-      WHERE elem @> jsonb_build_array(:userId)
+      FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) team
+      WHERE EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(team) user_id_text
+        WHERE user_id_text::int = :userId
+      )
     )`;
   }
 
