@@ -54,6 +54,11 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(savedGame.id);
   }
 
+  async updateSocialPhoto(id: number, photoUrl: string) {
+    await this.gamesRepository.update(id, { socialPhoto: photoUrl });
+    return this.findOne(id);
+  }
+
   async endGame(id: number) {
     await this.gamesRepository.update(id, {
       endTime: new Date(),

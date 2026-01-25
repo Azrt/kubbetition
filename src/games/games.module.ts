@@ -19,12 +19,14 @@ import { FirebaseModule } from 'src/common/modules/firebase.module';
 import { RedisService } from 'src/common/services/redis.service';
 import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { GeolocationService } from 'src/common/services/geolocation.service';
+import { FileUploadModule } from 'src/common/modules/file-upload.module';
 
 @Module({
   imports: [
     FirebaseModule,
     TypeOrmModule.forFeature([Game, User, Team, FriendRequest]),
     forwardRef(() => AuthModule),
+    FileUploadModule,
   ],
   controllers: [GamesController],
   providers: [

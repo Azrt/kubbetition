@@ -79,4 +79,7 @@ export class Game extends Common {
 
   @Column({ type: "int", nullable: true })
   round: number | null;
+
+  @Column({ nullable: true, length: 450 })
+  socialPhoto: string | null;
 }

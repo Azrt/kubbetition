@@ -10,12 +10,14 @@ import { AuthModule } from 'src/auth/auth.module';
 import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
 import { JwtService } from '@nestjs/jwt';
 import { UsersModule } from 'src/users/users.module';
+import { FileUploadModule } from 'src/common/modules/file-upload.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Event, User, Game, FriendRequest]),
     AuthModule,
     UsersModule,
+    FileUploadModule,
   ],
   controllers: [EventsController],
   providers: [EventsService, JwtService],

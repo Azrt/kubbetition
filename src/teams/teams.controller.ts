@@ -8,7 +8,9 @@ import {
   Delete,
   UseInterceptors,
   UseGuards,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamMembersDto } from "./dto/update-team.dto";
@@ -25,12 +27,16 @@ import { IncludeAdminRoles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/role.enum';
 import { EmptyTeamGuard } from 'src/common/guards/empty-team.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 
 @ApiTags('teams')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("teams")
 export class TeamsController {
-  constructor(private readonly teamsService: TeamsService) {}
+  constructor(
+    private readonly teamsService: TeamsService,
+    private readonly fileUploadService: FileUploadService,
+  ) {}
 
   @Post()
   @UseGuards(EmptyTeamGuard)
@@ -64,6 +70,28 @@ export class TeamsController {
     @Body() updateTeamDto: UpdateTeamMembersDto
   ) {
     return this.teamsService.update(+teamId, updateTeamDto);
+  }
+
+  @Post(":teamId/logo")
+  @UseGuards(SameTeamGuard)
+  @IncludeAdminRoles()
+  @UseInterceptors(FileInterceptor("logo"))
+  async uploadLogo(
+    @Param("teamId") teamId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const logoUrl = await this.fileUploadService.uploadFile(file, FileType.TEAM_LOGO, {
+      resize: { width: 300 },
+      format: 'jpeg',
+    });
+
+    // Delete old logo if exists
+    const team = await this.teamsService.findOne(+teamId);
+    if (team?.logo) {
+      await this.fileUploadService.deleteFile(team.logo, FileType.TEAM_LOGO);
+    }
+
+    return this.teamsService.updateLogo(+teamId, logoUrl);
   }
 
   @Delete(":teamId")

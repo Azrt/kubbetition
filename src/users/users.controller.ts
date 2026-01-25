@@ -9,10 +9,11 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ThumbnailPipe } from 'src/common/pipes/thumbnail.pipe';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -30,7 +31,10 @@ import { SearchUsersDto } from './dto/search-users.dto';
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly fileUploadService: FileUploadService,
+  ) {}
 
   @Get()
   findAll() {
@@ -110,11 +114,29 @@ export class UsersController {
 
   @Post(":id/image")
   @UseInterceptors(FileInterceptor("image"))
-  uploadImage(
+  async uploadImage(
     @Param("id") id: string,
-    @UploadedFile(ThumbnailPipe) image: string
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.usersService.uploadImage(+id, image);
+    // Only allow users to upload their own avatar or admins
+    const isAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN';
+    if (+id !== currentUser.id && !isAdmin) {
+      throw new ForbiddenException('You can only upload your own avatar');
+    }
+
+    const imageUrl = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, {
+      resize: { width: 300 },
+      format: 'jpeg',
+    });
+
+    // Delete old image if exists
+    const user = await this.usersService.findOne(+id);
+    if (user?.image) {
+      await this.fileUploadService.deleteFile(user.image, FileType.USER_AVATAR);
+    }
+
+    return this.usersService.uploadImage(+id, imageUrl);
   }
 
   @Patch(":id")

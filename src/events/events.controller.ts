@@ -9,7 +9,10 @@ import {
   Patch,
   Delete,
   Query,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -21,12 +24,16 @@ import { JoinEventDto } from './dto/join-event.dto';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RankingEntryDto } from './dto/ranking-response.dto';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 
 @ApiTags('events')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly fileUploadService: FileUploadService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new event' })

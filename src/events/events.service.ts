@@ -184,6 +184,29 @@ export class EventsService {
     return this.eventsRepository.save(updatedEvent);
   }
 
+  async updateImage(eventId: number, imageUrl: string, currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    const isAdmin = isAdminRole(currentUser);
+
+    if (!isAdmin && !isEventCreator) {
+      throw new ForbiddenException('Only the event creator or admin can update the event image');
+    }
+
+    return this.eventsRepository.save({
+      ...event,
+      image: imageUrl,
+    });
+  }
+
   async create(createEventDto: CreateEventDto, currentUser: User): Promise<EventEntity> {
     const { gameType, rounds, startTime, joiningTime, isPublic, ...rest } = createEventDto as any;
 

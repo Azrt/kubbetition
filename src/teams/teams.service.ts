@@ -94,6 +94,10 @@ export class TeamsService {
     return this.teamsRepository.save(team);
   }
 
+  async updateLogo(id: number, logoUrl: string) {
+    return this.teamsRepository.update(id, { logo: logoUrl });
+  }
+
   async remove(id: number, user: User) {
     const team = await this.teamsRepository.findOne({
       where: { id },

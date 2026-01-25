@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { GamesService } from './games.service';
 import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
@@ -19,6 +20,8 @@ import { UsersService } from 'src/users/users.service';
 import { JoinTeamParamsDto } from './dto/join-team.dto';
 import { TeamReadyParamsDto } from './dto/team-ready.dto';
 import { UpdateTeamScoreParamsDto, UpdateTeamScoreBodyDto } from './dto/update-team-score.dto';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { isAdminRole } from 'src/common/helpers/user';
 
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -29,6 +32,7 @@ export class GamesController {
     private readonly gamesGateway: GamesGateway,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -201,5 +205,44 @@ export class GamesController {
     await this.gamesGateway.sendGameDataToClients(game);
 
     return game;
+  }
+
+  @Post(":gameId/social-photo")
+  @UseInterceptors(FileInterceptor("photo"))
+  @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  async uploadSocialPhoto(
+    @Param("gameId") gameId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
+    const game = await this.gamesService.findOne(+gameId, user);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    // Check if user is a participant in the game
+    const isParticipant = game.participants?.some((p) => p.id === user.id) ||
+      game.team1Members?.some((m) => m.id === user.id) ||
+      game.team2Members?.some((m) => m.id === user.id);
+
+    if (!isParticipant && !isAdminRole(user)) {
+      throw new ForbiddenException('Only game participants can upload social photos');
+    }
+
+    const photoUrl = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, {
+      resize: { width: 1200 },
+      format: 'jpeg',
+    });
+
+    // Delete old photo if exists
+    if (game.socialPhoto) {
+      await this.fileUploadService.deleteFile(game.socialPhoto, FileType.GAME_PHOTO);
+    }
+
+    const updatedGame = await this.gamesService.updateSocialPhoto(+gameId, photoUrl);
+    await this.gamesGateway.sendGameDataToClients(updatedGame);
+
+    return updatedGame;
   }
 }
