@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
-import { ApiBearerAuth } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
 import { TeamRequestsService } from "./team-requests.service";
 import { Paginate, PaginateQuery, Paginated } from "nestjs-paginate";
@@ -12,6 +12,7 @@ import { IncludeAdminRoles } from "src/common/decorators/roles.decorator";
 import { Role } from "src/common/enums/role.enum";
 import { TeamRequestParamDto } from "./dto/team-request-param.dto";
 
+@ApiTags('team-requests')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("team-requests")
 export class TeamRequestsController {

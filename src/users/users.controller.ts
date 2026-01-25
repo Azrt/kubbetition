@@ -13,7 +13,7 @@ import {
 import { UsersService } from './users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ThumbnailPipe } from 'src/common/pipes/thumbnail.pipe';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
@@ -26,6 +26,7 @@ import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
 import { FriendRequestParamDto } from './dto/friend-request-param.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 
+@ApiTags('users')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
 export class UsersController {

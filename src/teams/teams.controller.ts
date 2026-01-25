@@ -12,7 +12,7 @@ import {
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamMembersDto } from "./dto/update-team.dto";
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
@@ -26,6 +26,7 @@ import { Role } from 'src/common/enums/role.enum';
 import { EmptyTeamGuard } from 'src/common/guards/empty-team.guard';
 import { AuthGuard } from '@nestjs/passport';
 
+@ApiTags('teams')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("teams")
 export class TeamsController {

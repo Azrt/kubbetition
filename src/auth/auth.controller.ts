@@ -17,8 +17,9 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('auth')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("auth")
 export class AuthController {

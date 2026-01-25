@@ -6,7 +6,7 @@ import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 import { Game } from './entities/game.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { BodyContextInterceptor } from 'src/common/interceptors/body-context.interceptor';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
@@ -20,6 +20,7 @@ import { JoinTeamParamsDto } from './dto/join-team.dto';
 import { TeamReadyParamsDto } from './dto/team-ready.dto';
 import { UpdateTeamScoreParamsDto, UpdateTeamScoreBodyDto } from './dto/update-team-score.dto';
 
+@ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
