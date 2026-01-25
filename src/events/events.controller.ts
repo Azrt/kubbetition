@@ -8,8 +8,9 @@ import {
   Request,
   Patch,
   Delete,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { StartRoundDto } from './dto/start-round.dto';
@@ -19,6 +20,7 @@ import { RequestWithUser } from 'src/auth/interfaces/requestWithUser.interface';
 import { JoinEventDto } from './dto/join-event.dto';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { RankingEntryDto } from './dto/ranking-response.dto';
 
 @ApiTags('events')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -66,6 +68,30 @@ export class EventsController {
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.getGames(eventId, req.user);
+  }
+
+  @Get(':id/ranking')
+  @ApiOperation({ summary: 'Get event ranking/standings' })
+  @ApiQuery({
+    name: 'round',
+    required: false,
+    type: Number,
+    description: 'Optional round number. If provided and valid, returns standings up to that round. If invalid or not provided, returns standings based on all games.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ranking list sorted from first to last place',
+    type: [RankingEntryDto],
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getRanking(
+    @Param('id', ParseIntPipe) eventId: number,
+    @Query('round') round?: string,
+    @Request() req?: RequestWithUser,
+  ): Promise<RankingEntryDto[]> {
+    const roundNumber = round ? parseInt(round, 10) : undefined;
+    return this.eventsService.getRanking(eventId, roundNumber, req?.user);
   }
 
   @Get(':id/games/active')

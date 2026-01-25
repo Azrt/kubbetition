@@ -773,6 +773,195 @@ export class EventsService {
     return activeGames;
   }
 
+  async getRanking(eventId: number, round?: number, currentUser?: User) {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check visibility if currentUser is provided
+    if (currentUser) {
+      const isEventCreator = event.createdBy.id === currentUser.id;
+      const isAdmin = isAdminRole(currentUser);
+      const isEventParticipant = this.isParticipant(event, currentUser.id);
+
+      if (!isAdmin && !isEventCreator && !isEventParticipant && !event.isPublic) {
+        throw new ForbiddenException('You are not allowed to access this event');
+      }
+    }
+
+    // Validate round parameter
+    let maxRound: number | null = null;
+    if (round !== undefined && round !== null) {
+      if (round < 1 || round > event.rounds) {
+        // Invalid round - use all games
+        maxRound = null;
+      } else {
+        maxRound = round;
+      }
+    }
+
+    // Get all relevant games (filtered by round if specified)
+    const relevantGames = (event.games || []).filter((game) => {
+      // Only include completed games (both scores set)
+      if (game.team1Score === null || game.team2Score === null || game.isCancelled) {
+        return false;
+      }
+      // Filter by round if specified
+      if (maxRound !== null && game.round !== null) {
+        return game.round <= maxRound;
+      }
+      return true;
+    });
+
+    // Get all participant user IDs from event
+    const allParticipantIds = new Set<number>();
+    (event.participants || []).forEach((team) => {
+      team.forEach((userId) => allParticipantIds.add(userId));
+    });
+
+    // Load all participants
+    const participants = await this.usersRepository.findBy({
+      id: In(Array.from(allParticipantIds)),
+    });
+
+    // Calculate statistics for each user
+    const userStats = new Map<
+      number,
+      {
+        user: User;
+        wins: number;
+        draws: number;
+        losses: number;
+        pointsFor: number;
+        pointsAgainst: number;
+        opponents: Set<number>; // Track opponents for Swiss-system calculation
+      }
+    >();
+
+    // Initialize stats for all participants
+    participants.forEach((user) => {
+      userStats.set(user.id, {
+        user,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        opponents: new Set(),
+      });
+    });
+
+    // Process each game
+    for (const game of relevantGames) {
+      if (!game.team1Members || !game.team2Members) continue;
+
+      const team1Ids = game.team1Members.map((u) => u.id);
+      const team2Ids = game.team2Members.map((u) => u.id);
+      const team1Score = game.team1Score!;
+      const team2Score = game.team2Score!;
+
+      // Determine result
+      const team1Won = team1Score > team2Score;
+      const team2Won = team2Score > team1Score;
+      const isDraw = team1Score === team2Score;
+
+      // Update stats for team1 members
+      team1Ids.forEach((userId) => {
+        const stats = userStats.get(userId);
+        if (!stats) return;
+
+        stats.pointsFor += team1Score;
+        stats.pointsAgainst += team2Score;
+
+        if (team1Won) {
+          stats.wins++;
+        } else if (team2Won) {
+          stats.losses++;
+        } else {
+          stats.draws++;
+        }
+
+        // Track opponents (team2 members)
+        team2Ids.forEach((opponentId) => stats.opponents.add(opponentId));
+      });
+
+      // Update stats for team2 members
+      team2Ids.forEach((userId) => {
+        const stats = userStats.get(userId);
+        if (!stats) return;
+
+        stats.pointsFor += team2Score;
+        stats.pointsAgainst += team1Score;
+
+        if (team2Won) {
+          stats.wins++;
+        } else if (team1Won) {
+          stats.losses++;
+        } else {
+          stats.draws++;
+        }
+
+        // Track opponents (team1 members)
+        team1Ids.forEach((opponentId) => stats.opponents.add(opponentId));
+      });
+    }
+
+    // Calculate tournament points for opponents strength (Swiss-system)
+    const userTournamentPoints = new Map<number, number>();
+    userStats.forEach((stats, userId) => {
+      // Calculate tournament points: wins = 1, draws = 0.5, losses = 0
+      const tournamentPoints = stats.wins + stats.draws * 0.5;
+      userTournamentPoints.set(userId, tournamentPoints);
+    });
+
+    // Calculate opponents strength and create ranking entries
+    const rankings = Array.from(userStats.values()).map((stats) => {
+      // Points field represents pointsFor (total points scored in games)
+      const points = stats.pointsFor;
+
+      // Calculate opponents strength: sum of all opponents' tournament points
+      let opponentsStrength = 0;
+      stats.opponents.forEach((opponentId) => {
+        const opponentTournamentPoints = userTournamentPoints.get(opponentId) || 0;
+        opponentsStrength += opponentTournamentPoints;
+      });
+
+      return {
+        user: stats.user,
+        points, // This is pointsFor (points scored)
+        wins: stats.wins,
+        draws: stats.draws,
+        losses: stats.losses,
+        opponentsStrength,
+        pointsFor: stats.pointsFor,
+        pointsAgainst: stats.pointsAgainst,
+      };
+    });
+
+    // Sort by pointsFor (desc) first, then by tournament points, then by opponents strength
+    rankings.sort((a, b) => {
+      // Primary sort: pointsFor (points scored)
+      if (b.pointsFor !== a.pointsFor) {
+        return b.pointsFor - a.pointsFor;
+      }
+      // Secondary sort: tournament points (wins/draws)
+      const aTournamentPoints = a.wins + a.draws * 0.5;
+      const bTournamentPoints = b.wins + b.draws * 0.5;
+      if (bTournamentPoints !== aTournamentPoints) {
+        return bTournamentPoints - aTournamentPoints;
+      }
+      // Tertiary sort: opponents strength (Swiss-system tiebreaker)
+      return b.opponentsStrength - a.opponentsStrength;
+    });
+
+    return rankings;
+  }
+
   async leave(eventId: number, currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
