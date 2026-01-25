@@ -75,7 +75,7 @@ export class TeamsController {
   @Post(":teamId/logo")
   @UseGuards(SameTeamGuard)
   @IncludeAdminRoles()
-  @UseInterceptors(FileInterceptor("logo"))
+  @UseInterceptors(FileInterceptor("file"))
   async uploadLogo(
     @Param("teamId") teamId: string,
     @UploadedFile() file: Express.Multer.File,

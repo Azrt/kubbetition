@@ -84,10 +84,13 @@ export class FileUploadService {
 
       // Resize if specified
       if (options?.resize) {
-        sharpInstance = sharpInstance.resize(options.resize.width, options.resize.height, {
+        const resizeOptions: sharp.ResizeOptions = {
+          width: options.resize.width,
+          height: options.resize.height,
           fit: 'inside',
           withoutEnlargement: true,
-        });
+        };
+        sharpInstance = sharpInstance.resize(resizeOptions);
       }
 
       // Convert format

@@ -7,7 +7,7 @@ import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 import { Game } from './entities/game.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { BodyContextInterceptor } from 'src/common/interceptors/body-context.interceptor';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
@@ -137,6 +137,14 @@ export class GamesController {
 
   // Team operations
   @UseInterceptors(ParamContextInterceptor)
+  @ApiParam({
+    name: 'gameId',
+    type: 'integer',
+  })
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Post(":gameId/team/:team/join")
   async joinTeam(
     @Param() params: JoinTeamParamsDto,
@@ -172,6 +180,14 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor)
+  @ApiParam({
+    name: 'gameId',
+    type: 'integer',
+  })
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Post(":gameId/team/:team/ready")
   async setTeamReady(
     @Param() params: TeamReadyParamsDto,
@@ -189,6 +205,14 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  @ApiParam({
+    name: 'gameId',
+    type: 'integer',
+  })
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Patch(":gameId/team/:team/score")
   async updateTeamScore(
     @Param() params: UpdateTeamScoreParamsDto,
@@ -208,7 +232,7 @@ export class GamesController {
   }
 
   @Post(":gameId/social-photo")
-  @UseInterceptors(FileInterceptor("photo"))
+  @UseInterceptors(FileInterceptor("file"))
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
   async uploadSocialPhoto(
     @Param("gameId") gameId: string,

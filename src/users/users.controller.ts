@@ -113,7 +113,7 @@ export class UsersController {
   }
 
   @Post(":id/image")
-  @UseInterceptors(FileInterceptor("image"))
+  @UseInterceptors(FileInterceptor("file"))
   async uploadImage(
     @Param("id") id: string,
     @UploadedFile() file: Express.Multer.File,
