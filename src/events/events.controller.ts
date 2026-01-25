@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Request,
   Patch,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { EventsService } from './events.service';
@@ -174,5 +175,17 @@ export class EventsController {
   @ApiResponse({ status: 404, description: 'Event not found' })
   async leave(@Param('id', ParseIntPipe) eventId: number, @Request() req: RequestWithUser): Promise<Event> {
     return this.eventsService.leave(eventId, req.user);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an event' })
+  @ApiResponse({
+    status: 200,
+    description: 'Event deleted successfully',
+    type: Event,
+  })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async delete(@Param('id', ParseIntPipe) eventId: number, @Request() req: RequestWithUser): Promise<void> {
+    return this.eventsService.delete(eventId, req.user);
   }
 }

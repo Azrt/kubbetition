@@ -790,4 +790,21 @@ export class EventsService {
     event.participants = event.participants?.filter((team) => !team.includes(currentUser.id));
     return this.eventsRepository.save(event);
   }
+
+  async delete(eventId: number, currentUser: User): Promise<void> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    if (event.createdBy.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only the event creator can delete the event');
+    }
+
+    await this.eventsRepository.delete({ id: eventId });
+  }
 }
