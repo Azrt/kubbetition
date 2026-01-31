@@ -37,8 +37,9 @@ export const configValidationSchema = Joi.object({
   AWS_REGION: Joi.string().optional(),
   AWS_ACCESS_KEY_ID: Joi.string().optional(),
   AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
-  AWS_S3_AVATAR_BUCKET: Joi.string().optional(),
-  AWS_S3_EVENT_BUCKET: Joi.string().optional(),
-  AWS_S3_TEAM_BUCKET: Joi.string().optional(),
-  AWS_S3_GAME_BUCKET: Joi.string().optional(),
+  AWS_S3_PUBLIC_BUCKET: Joi.string().optional(),
+  AWS_S3_PRIVATE_BUCKET: Joi.string().optional(),
+  // Optional Cloudflare CDN configuration
+  CLOUDFLARE_PUBLIC_CDN_URL: Joi.string().uri().optional(),
+  CLOUDFLARE_PRIVATE_CDN_URL: Joi.string().uri().optional(),
 });

@@ -138,4 +138,4 @@ pgdata
 # Database seeding flag
 .seed-completed
 
-redit
+redis

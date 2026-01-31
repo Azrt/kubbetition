@@ -80,7 +80,7 @@ export class TeamsController {
     @Param("teamId") teamId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const logoUrl = await this.fileUploadService.uploadFile(file, FileType.TEAM_LOGO, {
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.TEAM_LOGO, +teamId, {
       resize: { width: 300 },
       format: 'jpeg',
     });
@@ -91,7 +91,8 @@ export class TeamsController {
       await this.fileUploadService.deleteFile(team.logo, FileType.TEAM_LOGO);
     }
 
-    return this.teamsService.updateLogo(+teamId, logoUrl);
+    // Store the file path (format: team/{teamId}/logo.jpg) in database
+    return this.teamsService.updateLogo(+teamId, filePath);
   }
 
   @Delete(":teamId")

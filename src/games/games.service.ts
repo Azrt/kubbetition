@@ -13,6 +13,8 @@ import { GameReadyEvent, GAME_READY_EVENT } from './events/game-ready.event';
 import { GameUpdateEvent, GAME_UPDATE_EVENT } from './events/game-update.event';
 import { RedisService } from 'src/common/services/redis.service';
 import { isAdminRole } from 'src/common/helpers/user';
+import { UsersService } from 'src/users/users.service';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 
 const HISTORY_CACHE_TTL = 300000; // 5 minutes in ms
 
@@ -25,6 +27,8 @@ export class GamesService implements GamesServiceInterface {
     private usersRepository: Repository<User>,
     private eventEmitter: EventEmitter2,
     private redisService: RedisService,
+    private usersService: UsersService,
+    private fileUploadService: FileUploadService,
   ) {}
 
   async create(createGameDto: CreateGameDto, currentUser: User) {
@@ -143,6 +147,18 @@ export class GamesService implements GamesServiceInterface {
         }
       }
       this.computeGameProperties(game);
+
+      // Hide social photo if user doesn't have access (private S3 objects require presigned URLs)
+      // Clients should use the dedicated endpoint to get presigned URLs
+      if (game.socialPhoto && currentUser) {
+        const hasAccess = await this.canAccessGameSocialPhoto(id, currentUser);
+        if (!hasAccess) {
+          game.socialPhoto = null;
+        }
+      } else if (game.socialPhoto && !currentUser) {
+        // No user provided, hide the photo (requires authentication)
+        game.socialPhoto = null;
+      }
     }
 
     return game;
@@ -460,5 +476,64 @@ export class GamesService implements GamesServiceInterface {
         this.redisService.delByPattern(RedisService.gameHistoryPattern(userId))
       )
     );
+  }
+
+  /**
+   * Check if a user has access to view a game's social photo.
+   * Access is granted if:
+   * 1. User is a participant in the game (participants, team1Members, or team2Members)
+   * 2. User is a friend of any participant
+   * 3. User is a team member of any participant (if participant has a team assigned)
+   * 4. User is an admin/superadmin
+   */
+  async canAccessGameSocialPhoto(gameId: number, user: User): Promise<boolean> {
+    // Admins always have access
+    if (isAdminRole(user)) {
+      return true;
+    }
+
+    const game = await this.findOne(gameId);
+    if (!game || !game.socialPhoto) {
+      return false;
+    }
+
+    // Collect all participant IDs
+    const participantIds = new Set<number>();
+    game.participants?.forEach(p => participantIds.add(p.id));
+    game.team1Members?.forEach(m => participantIds.add(m.id));
+    game.team2Members?.forEach(m => participantIds.add(m.id));
+
+    // Check if user is a participant
+    if (participantIds.has(user.id)) {
+      return true;
+    }
+
+    // Get user's friends
+    const userFriends = await this.usersService.getFriends(user);
+    const friendIds = new Set(userFriends.map(f => f.id));
+
+    // Check if user is a friend of any participant
+    for (const participantId of participantIds) {
+      if (friendIds.has(participantId)) {
+        return true;
+      }
+    }
+
+    // Check if user is a team member of any participant
+    if (user.team) {
+      const participantUsers = await this.usersRepository.find({
+        where: { id: In(Array.from(participantIds)) },
+        relations: ['team'],
+      });
+
+      for (const participant of participantUsers) {
+        // If participant has a team and it's the same as user's team
+        if (participant.team && participant.team.id === user.team.id) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 }

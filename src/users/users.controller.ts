@@ -125,8 +125,8 @@ export class UsersController {
       throw new ForbiddenException('You can only upload your own avatar');
     }
 
-    const imageUrl = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, {
-      resize: { width: 300 },
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, +id, {
+      resize: { width: 600, height: 600 },
       format: 'jpeg',
     });
 
@@ -136,7 +136,8 @@ export class UsersController {
       await this.fileUploadService.deleteFile(user.image, FileType.USER_AVATAR);
     }
 
-    return this.usersService.uploadImage(+id, imageUrl);
+    // Store the file path (format: user/{userId}/avatar.jpg) in database
+    return this.usersService.uploadImage(+id, filePath);
   }
 
   @Patch(":id")

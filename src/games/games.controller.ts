@@ -254,8 +254,8 @@ export class GamesController {
       throw new ForbiddenException('Only game participants can upload social photos');
     }
 
-    const photoUrl = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, {
-      resize: { width: 1200 },
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, +gameId, {
+      resize: { width: 1024, height: 1024 },
       format: 'jpeg',
     });
 
@@ -264,9 +264,45 @@ export class GamesController {
       await this.fileUploadService.deleteFile(game.socialPhoto, FileType.GAME_PHOTO);
     }
 
-    const updatedGame = await this.gamesService.updateSocialPhoto(+gameId, photoUrl);
+    // Store the file path (format: game/{gameId}/social-photo.jpg) in database
+    const updatedGame = await this.gamesService.updateSocialPhoto(+gameId, filePath);
     await this.gamesGateway.sendGameDataToClients(updatedGame);
 
     return updatedGame;
+  }
+
+  @Get(":gameId/social-photo")
+  @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  async getSocialPhotoUrl(
+    @Param("gameId") gameId: string,
+    @CurrentUser() user: User,
+  ) {
+    const game = await this.gamesService.findOne(+gameId, user);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    if (!game.socialPhoto) {
+      throw new NotFoundException('Game does not have a social photo');
+    }
+
+    // Check if user has access to the social photo
+    const hasAccess = await this.gamesService.canAccessGameSocialPhoto(+gameId, user);
+    if (!hasAccess) {
+      throw new ForbiddenException('You do not have access to this social photo');
+    }
+
+    // Generate presigned URL with long TTL (1 year) since game photos don't change
+    // Cloudflare CDN will be used if configured
+    // game.socialPhoto is stored as file path: game/{gameId}/social-photo.jpg
+    const presignedUrl = await this.fileUploadService.getPresignedUrl(
+      game.socialPhoto,
+      FileType.GAME_PHOTO,
+      undefined, // Use default long TTL for game photos
+      true, // Use Cloudflare CDN if available
+    );
+
+    return { url: presignedUrl };
   }
 }
