@@ -119,33 +119,38 @@ export class FileUploadService {
       throw new BadRequestException('Failed to process image');
     }
 
+    // Generate hash of the processed image content for cache invalidation
+    // Hash is based on file content, so when file changes, hash changes, enabling cache revalidation
+    const fileHash = crypto.createHash('sha256').update(processedBuffer as any).digest('hex').substring(0, 16);
+    
     // Generate filename based on file type
     const fileExtension = processedFormat === 'jpeg' ? 'jpg' : processedFormat;
     let filename: string;
     
     if (options?.filename) {
-      filename = options.filename.endsWith(`.${fileExtension}`) 
-        ? options.filename 
-        : `${options.filename}.${fileExtension}`;
+      // If custom filename provided, add hash before extension
+      const nameWithoutExt = options.filename.replace(/\.[^/.]+$/, '');
+      filename = `${nameWithoutExt}.${fileHash}.${fileExtension}`;
     } else {
-      // Default filenames based on file type
+      // Default filenames based on file type, with hash included
+      let baseName: string;
       switch (fileType) {
         case FileType.USER_AVATAR:
-          filename = `avatar.${fileExtension}`;
+          baseName = 'avatar';
           break;
         case FileType.TEAM_LOGO:
-          filename = `logo.${fileExtension}`;
+          baseName = 'logo';
           break;
         case FileType.GAME_PHOTO:
-          filename = `social-photo.${fileExtension}`;
+          baseName = 'social-photo';
           break;
         case FileType.EVENT_IMAGE:
-          filename = `image.${fileExtension}`;
+          baseName = 'image';
           break;
         default:
-          const uniqueId = crypto.randomBytes(16).toString('hex');
-          filename = `${uniqueId}.${fileExtension}`;
+          baseName = crypto.randomBytes(8).toString('hex');
       }
+      filename = `${baseName}.${fileHash}.${fileExtension}`;
     }
 
     // Determine if file should be private (based on file type)
