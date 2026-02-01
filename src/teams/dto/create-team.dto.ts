@@ -12,7 +12,7 @@ export class CreateTeamDto {
 
   @ApiProperty()
   @IsOptional()
-  image: string;
+  logo: string;
 
   @ApiProperty()
   @IsBoolean()
@@ -23,4 +23,9 @@ export class CreateTeamDto {
   @IsString()
   @Validate(CountryExistsRule)
   country: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  details: string;
 }

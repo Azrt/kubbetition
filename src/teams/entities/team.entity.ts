@@ -21,6 +21,9 @@ export class Team extends Common {
   country: string;
 
   @Column({ nullable: true, length: 450 })
+  details: string;
+
+  @Column({ nullable: true, length: 450 })
   logo: string;
 
   @OneToMany(() => User, (user) => user.team, {

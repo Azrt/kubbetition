@@ -40,8 +40,27 @@ export class TeamsController {
 
   @Post()
   @UseGuards(EmptyTeamGuard)
-  create(@Body() createTeamDto: CreateTeamDto, @CurrentUser() user: User) {
-    return this.teamsService.create(createTeamDto, user);
+  @UseInterceptors(FileInterceptor("logo"))
+  async create(
+    @Body() createTeamDto: CreateTeamDto,
+    @CurrentUser() user: User,
+    @UploadedFile() logo?: Express.Multer.File,
+  ) {
+    const team = await this.teamsService.create(createTeamDto, user);
+    
+    // Upload logo if provided
+    if (logo) {
+      const logoPath = await this.fileUploadService.uploadFile(logo, FileType.TEAM_LOGO, team.id, {
+        resize: { width: 800 },
+        format: 'png',
+      });
+      
+      // Update team with logo path and return updated team
+      await this.teamsService.updateLogo(team.id, logoPath);
+      return this.teamsService.findOne(team.id);
+    }
+    
+    return team;
   }
 
   @Get()
@@ -63,18 +82,38 @@ export class TeamsController {
 
   @Patch(":teamId")
   @UseGuards(SameTeamGuard)
-  @IncludeAdminRoles()
-  @UseInterceptors(NotFoundInterceptor)
-  update(
+  @IncludeAdminRoles(Role.SUPERVISOR)
+  @UseInterceptors(FileInterceptor("logo"), NotFoundInterceptor)
+  async update(
     @Param("teamId") teamId: string,
-    @Body() updateTeamDto: UpdateTeamMembersDto
+    @Body() updateTeamDto: UpdateTeamMembersDto,
+    @UploadedFile() logo?: Express.Multer.File,
   ) {
-    return this.teamsService.update(teamId, updateTeamDto);
+    // Upload logo if provided
+    if (logo) {
+      const logoPath = await this.fileUploadService.uploadFile(logo, FileType.TEAM_LOGO, teamId, {
+        resize: { width: 800 },
+        format: 'png',
+      });
+      
+      // Delete old logo if exists
+      const team = await this.teamsService.findOne(teamId);
+      if (team?.logo) {
+        await this.fileUploadService.deleteFile(team.logo, FileType.TEAM_LOGO);
+      }
+      
+      // Update team with new logo path
+      await this.teamsService.updateLogo(teamId, logoPath);
+    }
+    
+    // Update team and return the updated team
+    await this.teamsService.update(teamId, updateTeamDto);
+    return this.teamsService.findOne(teamId);
   }
 
   @Post(":teamId/logo")
   @UseGuards(SameTeamGuard)
-  @IncludeAdminRoles()
+  @IncludeAdminRoles(Role.SUPERVISOR)
   @UseInterceptors(FileInterceptor("file"))
   async uploadLogo(
     @Param("teamId") teamId: string,

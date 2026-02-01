@@ -7,6 +7,7 @@ export class UpdateTeamMembersDto extends PartialType(CreateTeamDto) {
   @ApiProperty({ isArray: true })
   @IsArray()
   @IsUUID('4', { each: true })
+  @IsOptional()
   members: Array<string>;
 
   @ApiProperty()
@@ -14,4 +15,14 @@ export class UpdateTeamMembersDto extends PartialType(CreateTeamDto) {
   @IsOptional()
   @Validate(CountryExistsRule)
   country: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  details: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  logo: string;
 }
