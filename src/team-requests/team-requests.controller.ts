@@ -36,6 +36,11 @@ export class TeamRequestsController {
     return this.teamRequestsService.findAll(query, user);
   }
 
+  @Get("me")
+  getMyLatestTeamRequest(@CurrentUser() user: User) {
+    return this.teamRequestsService.getMyLatestTeamRequest(user);
+  }
+
   @Post(":teamRequestId/accept")
   @IncludeAdminRoles(Role.SUPERVISOR)
   acceptTeamRequest(
@@ -61,7 +66,6 @@ export class TeamRequestsController {
   }
 
   @Delete(":teamRequestId")
-  @IncludeAdminRoles()
   remove(
     @Param() params: TeamRequestParamDto,
     @CurrentUser() user: User

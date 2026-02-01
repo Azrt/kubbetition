@@ -4,7 +4,7 @@ import { ROLES_KEY } from "src/common/decorators/roles.decorator";
 import { Role } from 'src/common/enums/role.enum';
 import { User } from 'src/users/entities/user.entity';
 
-const matchRoles = (user: User, roles: Array<Role>) =>  roles.some((role) => role.includes(user.role))
+const matchRoles = (user: User, roles: Array<Role>) => roles.includes(user.role)
 
 @Injectable()
 export class RolesGuard implements CanActivate {

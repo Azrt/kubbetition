@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, Repository } from "typeorm";
+import { DataSource, In, Not, Repository } from "typeorm";
 import { TeamRequest } from "./entities/team-request.entity";
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
 import { PaginateConfig, PaginateQuery, paginate } from "nestjs-paginate";
@@ -33,14 +33,22 @@ export class TeamRequestsService {
 
     if (isAdmin && !dtoUser) throw new BadRequestException("Missing user id");
 
-    const team = this.teamsRepository.create({ id: dtoTeam });
+    // Verify team exists before creating team request
+    const team = await this.teamsRepository.findOne({
+      where: { id: dtoTeam },
+    });
+
+    if (!team) {
+      throw new BadRequestException("Team doesn't exist");
+    }
+
     const user = this.usersRepository.create({
       id: isAdmin ? dtoUser : initialUser.id,
     });
 
     const hasExistingTeamRequest = await this.findByUserId(user.id);
 
-    if (hasExistingTeamRequest) {
+    if (hasExistingTeamRequest.length > 0) {
       throw new BadRequestException("User already has a team request");
     }
 
@@ -64,13 +72,14 @@ export class TeamRequestsService {
     const isUser = isUserRole(user);
     const config: PaginateConfig<TeamRequest> = {
       ...TEAM_REQUESTS_PAGINATION_CONFIG,
-      ...(isUser && {
-        where: {
+      where: {
+        status: Not(TeamRequestStatus.ARCHIVED),
+        ...(isUser && {
           team: {
             id: user.team?.id,
           },
-        },
-      }),
+        }),
+      },
     };
 
     return paginate(query, this.teamRequestsRepository, config);
@@ -85,6 +94,21 @@ export class TeamRequestsService {
         },
       },
     });
+  }
+
+  getMyLatestTeamRequest(user: User) {
+    if (!user?.id) {
+      return null;
+    }
+
+    return this.teamRequestsRepository
+      .createQueryBuilder("teamRequest")
+      .leftJoinAndSelect("teamRequest.team", "team")
+      .leftJoinAndSelect("teamRequest.user", "user")
+      .where("user.id = :userId", { userId: user.id })
+      .andWhere("teamRequest.status != :archivedStatus", { archivedStatus: TeamRequestStatus.ARCHIVED })
+      .orderBy("teamRequest.createdAt", "DESC")
+      .getOne();
   }
 
   async isFromSameTeam(id: string, user: User) {
@@ -165,10 +189,15 @@ export class TeamRequestsService {
 
     if (!isAdmin && (!isCreator || (isCreator && !isPending))) {
       throw new BadRequestException(
-        "You can only delete team requests that you created or are pending"
+        "You can only archive team requests that you created or are pending"
       );
     }
 
-    return this.teamRequestsRepository.delete({ id });
+    const updatedTeamRequest = this.teamRequestsRepository.create({
+      id: teamRequest.id,
+      status: TeamRequestStatus.ARCHIVED,
+    });
+
+    return this.teamRequestsRepository.save(updatedTeamRequest);
   }
 }
