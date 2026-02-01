@@ -53,7 +53,7 @@ export class TeamRequestsService {
     return this.teamRequestsRepository.save(teamRequest);
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return this.teamRequestsRepository.findOne({
       where: { id },
       relations: ["team", "user"],
@@ -76,7 +76,7 @@ export class TeamRequestsService {
     return paginate(query, this.teamRequestsRepository, config);
   }
 
-  findByUserId(id: number) {
+  findByUserId(id: string) {
     return this.teamRequestsRepository.find({
       where: {
         status: TeamRequestStatus.IN_PROGRESS,
@@ -87,7 +87,7 @@ export class TeamRequestsService {
     });
   }
 
-  async isFromSameTeam(id: number, user: User) {
+  async isFromSameTeam(id: string, user: User) {
     const teamRequest = await this.findOne(id);
     const isAdmin = isAdminRole(user);
 
@@ -102,7 +102,7 @@ export class TeamRequestsService {
     return teamRequest;
   }
 
-  async acceptTeamRequest(id: number, userRequest: User) {
+  async acceptTeamRequest(id: string, userRequest: User) {
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -141,7 +141,7 @@ export class TeamRequestsService {
     }
   }
 
-  async rejectTeamRequest(id: number, userRequest: User) {
+  async rejectTeamRequest(id: string, userRequest: User) {
     const teamRequest = await this.isFromSameTeam(id, userRequest);
 
     const updatedTeamRequest = this.teamRequestsRepository.create({
@@ -152,7 +152,7 @@ export class TeamRequestsService {
     return this.teamRequestsRepository.save(updatedTeamRequest);
   }
 
-  async remove(id: number, user: User) {
+  async remove(id: string, user: User) {
     const teamRequest = await this.findOne(id);
 
     if (!teamRequest) {

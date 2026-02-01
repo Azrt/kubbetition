@@ -31,7 +31,7 @@ export class GamesGateway
   ) {}
 
   private readonly logger = new Logger(GamesGateway.name);
-  private readonly connectedClients = new Map<number, ExtendedSocket>();
+  private readonly connectedClients = new Map<string, ExtendedSocket>();
 
   @WebSocketServer() io: Server;
 

@@ -64,9 +64,13 @@ export class TeamsService {
   }
 
   getMyTeam(user: User) {
+    if (!user.team?.id) {
+      return null;
+    }
+    
     return this.teamsRepository.findOne({
       relations: ["members"],
-      where: { id: user.team?.id },
+      where: { id: user.team.id },
     });
   }
 
@@ -74,14 +78,14 @@ export class TeamsService {
     return paginate(query, this.teamsRepository, TEAMS_PAGINATION_CONFIG);
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return this.teamsRepository.findOne({
       relations: ["members"],
       where: { id },
     });
   }
 
-  async update(id: number, updateTeamDto: UpdateTeamMembersDto) {
+  async update(id: string, updateTeamDto: UpdateTeamMembersDto) {
     const team = this.teamsRepository.create(
       updateTeamDto as unknown as Team
     );
@@ -94,11 +98,11 @@ export class TeamsService {
     return this.teamsRepository.save(team);
   }
 
-  async updateLogo(id: number, logoUrl: string) {
+  async updateLogo(id: string, logoUrl: string) {
     return this.teamsRepository.update(id, { logo: logoUrl });
   }
 
-  async remove(id: number, user: User) {
+  async remove(id: string, user: User) {
     const team = await this.teamsRepository.findOne({
       where: { id },
       relations: ['createdBy'],

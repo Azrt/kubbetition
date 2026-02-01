@@ -12,7 +12,7 @@ import { isAdminRole } from "src/common/helpers/user";
 export class ParticipantsAreFriendsOrTeamMembersRule implements ValidatorConstraintInterface {
   constructor(private usersService: UsersService) {}
 
-  async validate(participantIds: Array<number>, validationArguments: ValidationArguments) {
+  async validate(participantIds: Array<string>, validationArguments: ValidationArguments) {
     if (!participantIds?.length) return true; // Empty array is valid (optional field)
 
     const dto = validationArguments.object as any;
@@ -33,7 +33,7 @@ export class ParticipantsAreFriendsOrTeamMembersRule implements ValidatorConstra
     const friendIds = new Set(friends.map((friend) => friend.id));
 
     // Get user's team members
-    const teamMemberIds = new Set<number>();
+    const teamMemberIds = new Set<string>();
     if (currentUser.team) {
       const teamMembers = await this.usersService.findByIds([], currentUser.team.id);
       teamMembers.forEach((member) => {

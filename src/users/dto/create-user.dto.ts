@@ -4,7 +4,7 @@ import { IsEmail, IsOptional, IsString } from 'class-validator';
 export class CreateUserDto {
   @ApiProperty()
   @IsOptional()
-  readonly id?: number;
+  readonly id?: string;
 
   @ApiProperty()
   @IsString()

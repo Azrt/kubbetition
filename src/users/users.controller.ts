@@ -42,11 +42,16 @@ export class UsersController {
   }
 
   @Get("search")
-  search(@Query() searchParams: SearchUsersDto) {
+  search(
+    @Query() searchParams: SearchUsersDto,
+    @CurrentUser() user: User
+  ) {
     return this.usersService.search(
       searchParams.email,
       searchParams.lastName,
-      searchParams.teamId
+      searchParams.teamId,
+      searchParams.excludeWithFriendRequest,
+      user
     );
   }
 
@@ -79,7 +84,7 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.acceptFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
     );
   }
@@ -90,7 +95,7 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.rejectFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
     );
   }
@@ -101,7 +106,7 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.deleteFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
     );
   }
@@ -109,7 +114,7 @@ export class UsersController {
   @Get(":id")
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("id") id: string) {
-    return this.usersService.findOne(+id);
+    return this.usersService.findOne(id);
   }
 
   @Post(":id/image")
@@ -121,33 +126,33 @@ export class UsersController {
   ) {
     // Only allow users to upload their own avatar or admins
     const isAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN';
-    if (+id !== currentUser.id && !isAdmin) {
+    if (id !== currentUser.id && !isAdmin) {
       throw new ForbiddenException('You can only upload your own avatar');
     }
 
-    const filePath = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, +id, {
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, id, {
       resize: { width: 600, height: 600 },
       format: 'jpeg',
     });
 
     // Delete old image if exists
-    const user = await this.usersService.findOne(+id);
+    const user = await this.usersService.findOne(id);
     if (user?.image) {
       await this.fileUploadService.deleteFile(user.image, FileType.USER_AVATAR);
     }
 
     // Store the file path (format: user/{userId}/avatar.jpg) in database
-    return this.usersService.uploadImage(+id, filePath);
+    return this.usersService.uploadImage(id, filePath);
   }
 
   @Patch(":id")
   update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+    return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(":id")
   remove(@Param("id") id: string) {
-    return this.usersService.remove(+id);
+    return this.usersService.remove(id);
   }
 
   @Patch(":id/token")

@@ -16,8 +16,9 @@ import {
 
 @Entity()
 export class User {
-  @PrimaryGeneratedColumn()
-  public id: number;
+  @PrimaryGeneratedColumn('uuid')
+  @Index()
+  public id: string;
 
   @Column({ length: 250, unique: true })
   @Index("user_email_idx")

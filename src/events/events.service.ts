@@ -30,12 +30,12 @@ export class EventsService {
     private friendRequestsRepository: Repository<FriendRequest>,
   ) {}
 
-  private isParticipant(event: EventEntity, userId: number): boolean {
+  private isParticipant(event: EventEntity, userId: string): boolean {
     const teams = event.participants || [];
     return teams.some((team) => Array.isArray(team) && team.includes(userId));
   }
 
-  async join(eventId: number, team: number[], currentUser: User): Promise<EventEntity> {
+  async join(eventId: string, team: string[], currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -82,7 +82,7 @@ export class EventsService {
     });
 
     // Extract friend user IDs from friend requests
-    const friendIds = new Set<number>();
+    const friendIds = new Set<string>();
     for (const request of friendRequests) {
       if (request.requester.id === currentUser.id) {
         friendIds.add(request.recipient.id);
@@ -92,7 +92,7 @@ export class EventsService {
     }
 
     // Get team member IDs (excluding current user)
-    const teamMemberIds = new Set<number>();
+    const teamMemberIds = new Set<string>();
     if (userWithTeam?.team?.members) {
       for (const member of userWithTeam.team.members) {
         if (member.id !== currentUser.id) {
@@ -151,7 +151,7 @@ export class EventsService {
     return this.eventsRepository.save(event);
   }
 
-  async update(eventId: number, updateEventDto: UpdateEventDto, currentUser: User): Promise<EventEntity> {
+  async update(eventId: string, updateEventDto: UpdateEventDto, currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -184,7 +184,7 @@ export class EventsService {
     return this.eventsRepository.save(updatedEvent);
   }
 
-  async updateImage(eventId: number, imageUrl: string, currentUser: User): Promise<EventEntity> {
+  async updateImage(eventId: string, imageUrl: string, currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy'],
@@ -233,7 +233,7 @@ export class EventsService {
     return Array.isArray(savedEvent) ? savedEvent[0] : savedEvent;
   }
 
-  async startRound(eventId: number, startRoundDto: StartRoundDto, currentUser: User): Promise<Game[]> {
+  async startRound(eventId: string, startRoundDto: StartRoundDto, currentUser: User): Promise<Game[]> {
     const { roundNumber } = startRoundDto;
 
     const event = await this.eventsRepository.findOne({
@@ -366,7 +366,7 @@ export class EventsService {
    * Calculate team statistics from previous games
    */
   private calculateTeamStats(
-    team: Array<number>,
+    team: Array<string>,
     previousGames: Game[],
   ): {
     wins: number;
@@ -382,7 +382,7 @@ export class EventsService {
     let pointsAgainst = 0;
 
     // Helper to check if two teams are exactly the same
-    const areTeamsEqual = (team1: Array<number>, team2: Array<number>): boolean => {
+    const areTeamsEqual = (team1: Array<string>, team2: Array<string>): boolean => {
       if (team1.length !== team2.length) return false;
       const sorted1 = [...team1].sort();
       const sorted2 = [...team2].sort();
@@ -436,15 +436,15 @@ export class EventsService {
    * Similar-ranked teams are matched together (Swiss-style)
    */
   private generateTournamentMatchups(
-    participants: Array<Array<number>>,
+    participants: Array<Array<string>>,
     previousGames: Game[],
     gameType: GameType,
-  ): Array<[Array<number>, Array<number>]> {
-    const matchups: Array<[Array<number>, Array<number>]> = [];
+  ): Array<[Array<string>, Array<string>]> {
+    const matchups: Array<[Array<string>, Array<string>]> = [];
 
     // Calculate statistics for each team
     interface TeamWithStats {
-      team: Array<number>;
+      team: Array<string>;
       stats: ReturnType<typeof this.calculateTeamStats>;
       index: number;
     }
@@ -480,13 +480,13 @@ export class EventsService {
       }
     }
 
-    const getMatchupKey = (team1: Array<number>, team2: Array<number>): string => {
+    const getMatchupKey = (team1: Array<string>, team2: Array<string>): string => {
       const team1Sorted = [...team1].sort().join(',');
       const team2Sorted = [...team2].sort().join(',');
       return `${team1Sorted}|${team2Sorted}`;
     };
 
-    const havePlayedBefore = (team1: Array<number>, team2: Array<number>): boolean => {
+    const havePlayedBefore = (team1: Array<string>, team2: Array<string>): boolean => {
       return previousMatchups.has(getMatchupKey(team1, team2));
     };
 
@@ -553,11 +553,11 @@ export class EventsService {
    * @returns Array of matchups, where each matchup is [team1, team2]
    */
   private generateMatchups(
-    participants: Array<Array<number>>,
+    participants: Array<Array<string>>,
     previousGames: Game[],
     gameType: GameType,
-  ): Array<[Array<number>, Array<number>]> {
-    const matchups: Array<[Array<number>, Array<number>]> = [];
+  ): Array<[Array<string>, Array<string>]> {
+    const matchups: Array<[Array<string>, Array<string>]> = [];
 
     // Build a map of previous matchups
     const previousMatchups = new Set<string>();
@@ -572,14 +572,14 @@ export class EventsService {
     }
 
     // Helper function to create matchup key
-    const getMatchupKey = (team1: Array<number>, team2: Array<number>): string => {
+    const getMatchupKey = (team1: Array<string>, team2: Array<string>): string => {
       const team1Sorted = [...team1].sort().join(',');
       const team2Sorted = [...team2].sort().join(',');
       return `${team1Sorted}|${team2Sorted}`;
     };
 
     // Helper function to check if teams have played before
-    const havePlayedBefore = (team1: Array<number>, team2: Array<number>): boolean => {
+    const havePlayedBefore = (team1: Array<string>, team2: Array<string>): boolean => {
       return previousMatchups.has(getMatchupKey(team1, team2));
     };
 
@@ -653,7 +653,7 @@ export class EventsService {
     return matchups;
   }
 
-  async findOne(id: number): Promise<EventEntity> {
+  async findOne(id: string): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id },
       relations: ['createdBy', 'games'],
@@ -666,7 +666,7 @@ export class EventsService {
     return event;
   }
 
-  async findOneVisible(id: number, currentUser: User): Promise<EventEntity> {
+  async findOneVisible(id: string, currentUser: User): Promise<EventEntity> {
     const event = await this.findOne(id);
     if (event.isPublic) return event;
     if (isAdminRole(currentUser)) return event;
@@ -683,7 +683,7 @@ export class EventsService {
     return events.filter((e) => e.isPublic || this.isParticipant(e, currentUser.id));
   }
 
-  async endRound(eventId: number, currentUser: User): Promise<Game[]> {
+  async endRound(eventId: string, currentUser: User): Promise<Game[]> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -739,7 +739,7 @@ export class EventsService {
     return savedGames;
   }
 
-  async getGames(eventId: number, currentUser: User): Promise<Game[]> {
+  async getGames(eventId: string, currentUser: User): Promise<Game[]> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members', 'games.participants'],
@@ -770,7 +770,7 @@ export class EventsService {
     );
   }
 
-  async getActiveGames(eventId: number, currentUser: User): Promise<Game[]> {
+  async getActiveGames(eventId: string, currentUser: User): Promise<Game[]> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members'],
@@ -796,7 +796,7 @@ export class EventsService {
     return activeGames;
   }
 
-  async getRanking(eventId: number, round?: number, currentUser?: User) {
+  async getRanking(eventId: string, round?: number, currentUser?: User) {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members'],
@@ -842,7 +842,7 @@ export class EventsService {
     });
 
     // Get all participant user IDs from event
-    const allParticipantIds = new Set<number>();
+    const allParticipantIds = new Set<string>();
     (event.participants || []).forEach((team) => {
       team.forEach((userId) => allParticipantIds.add(userId));
     });
@@ -854,7 +854,7 @@ export class EventsService {
 
     // Calculate statistics for each user
     const userStats = new Map<
-      number,
+      string,
       {
         user: User;
         wins: number;
@@ -862,7 +862,7 @@ export class EventsService {
         losses: number;
         pointsFor: number;
         pointsAgainst: number;
-        opponents: Set<number>; // Track opponents for Swiss-system calculation
+        opponents: Set<string>; // Track opponents for Swiss-system calculation
       }
     >();
 
@@ -875,7 +875,7 @@ export class EventsService {
         losses: 0,
         pointsFor: 0,
         pointsAgainst: 0,
-        opponents: new Set(),
+        opponents: new Set<string>(),
       });
     });
 
@@ -935,7 +935,7 @@ export class EventsService {
     }
 
     // Calculate tournament points for opponents strength (Swiss-system)
-    const userTournamentPoints = new Map<number, number>();
+    const userTournamentPoints = new Map<string, number>();
     userStats.forEach((stats, userId) => {
       // Calculate tournament points: wins = 1, draws = 0.5, losses = 0
       const tournamentPoints = stats.wins + stats.draws * 0.5;
@@ -985,7 +985,7 @@ export class EventsService {
     return rankings;
   }
 
-  async leave(eventId: number, currentUser: User): Promise<EventEntity> {
+  async leave(eventId: string, currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -1003,7 +1003,7 @@ export class EventsService {
     return this.eventsRepository.save(event);
   }
 
-  async delete(eventId: number, currentUser: User): Promise<void> {
+  async delete(eventId: string, currentUser: User): Promise<void> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],

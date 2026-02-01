@@ -31,11 +31,11 @@ export class RedisService {
   }
 
   // Helper to generate cache keys
-  static gameHistoryKey(userId: number, page?: number, limit?: number): string {
+  static gameHistoryKey(userId: string, page?: number, limit?: number): string {
     return `game:history:${userId}:${page ?? 1}:${limit ?? 10}`;
   }
 
-  static gameHistoryPattern(userId: number): string {
+  static gameHistoryPattern(userId: string): string {
     return `game:history:${userId}:*`;
   }
 }

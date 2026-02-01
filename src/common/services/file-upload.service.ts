@@ -186,7 +186,7 @@ export class FileUploadService {
   async uploadFromUrl(
     imageUrl: string,
     fileType: FileType,
-    entityId: number,
+    entityId: string,
     options?: {
       resize?: { width: number; height?: number };
       format?: 'png' | 'jpeg' | 'webp';
@@ -239,7 +239,7 @@ export class FileUploadService {
   async uploadFile(
     file: Express.Multer.File,
     fileType: FileType,
-    entityId: number,
+    entityId: string,
     options?: {
       resize?: { width: number; height?: number };
       format?: 'png' | 'jpeg' | 'webp';
@@ -276,7 +276,7 @@ export class FileUploadService {
     buffer: Buffer,
     filename: string,
     fileType: FileType,
-    entityId: number,
+    entityId: string,
     format: string,
     isPrivate: boolean,
   ): Promise<string> {
@@ -311,7 +311,7 @@ export class FileUploadService {
     buffer: Buffer,
     filename: string,
     fileType: FileType,
-    entityId: number,
+    entityId: string,
     format: string,
   ): Promise<string> {
     const uploadDir = path.join(process.cwd(), 'uploads', fileType, entityId.toString());

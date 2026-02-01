@@ -4,7 +4,7 @@ import { CountryExistsRule } from 'src/common/validators/country-exists.rule';
 
 export class CreateTeamDto {
   @ApiProperty({ readOnly: true })
-  readonly id: number;
+  readonly id: string;
 
   @ApiProperty()
   @IsString()

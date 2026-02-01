@@ -86,7 +86,7 @@ export class GamesController {
     @Param("userId") userId: string,
     @Paginate() query: PaginateQuery
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findUserHistory(+userId, query);
+    return this.gamesService.findUserHistory(userId, query);
   }
 
   @Get(":gameId")
@@ -95,7 +95,7 @@ export class GamesController {
     @Param("gameId") gameId: string,
     @CurrentUser() currentUser: User,
   ) {
-    return this.gamesService.findOne(+gameId, currentUser);
+    return this.gamesService.findOne(gameId, currentUser);
   }
 
   @Patch(":gameId")
@@ -105,7 +105,7 @@ export class GamesController {
     @Body() updateGameDto: UpdateGameDto,
     @CurrentUser() currentUser: User
   ) {
-    const game = await this.gamesService.update(+gameId, updateGameDto, currentUser);
+    const game = await this.gamesService.update(gameId, updateGameDto, currentUser);
   
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -114,12 +114,12 @@ export class GamesController {
 
   @Delete(":gameId")
   remove(@Param("gameId") gameId: string) {
-    return this.gamesService.remove(+gameId);
+    return this.gamesService.remove(gameId);
   }
 
   @Patch(":gameId/end")
   async end(@Param() params: EndGameDto) {
-    const game = await this.gamesService.endGame(+params.gameId);
+    const game = await this.gamesService.endGame(params.gameId);
     await this.gamesGateway.sendGameDataToClients(game);
 
     return game;
@@ -128,7 +128,7 @@ export class GamesController {
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/cancel")
   async cancel(@Param() params: CancelGameDto) {
-    const game = await this.gamesService.cancelGame(+params.gameId);
+    const game = await this.gamesService.cancelGame(params.gameId);
 
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -156,7 +156,7 @@ export class GamesController {
     console.log('Team joining - user:', user.id, user.email);
 
     const game = await this.gamesService.joinTeam(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       user
     );
@@ -172,7 +172,7 @@ export class GamesController {
     @Param("gameId") gameId: string,
     @CurrentUser() user: User
   ) {
-    const game = await this.gamesService.leaveTeam(+gameId, user);
+    const game = await this.gamesService.leaveTeam(gameId, user);
 
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -194,7 +194,7 @@ export class GamesController {
     @CurrentUser() user: User
   ) {
     const game = await this.gamesService.setTeamReady(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       user
     );
@@ -220,7 +220,7 @@ export class GamesController {
     @CurrentUser() user: User
   ) {
     const game = await this.gamesService.updateTeamScore(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       body.score,
       user
@@ -239,7 +239,7 @@ export class GamesController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
   ) {
-    const game = await this.gamesService.findOne(+gameId, user);
+    const game = await this.gamesService.findOne(gameId, user);
 
     if (!game) {
       throw new NotFoundException('Game not found');
@@ -254,7 +254,7 @@ export class GamesController {
       throw new ForbiddenException('Only game participants can upload social photos');
     }
 
-    const filePath = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, +gameId, {
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, gameId, {
       resize: { width: 1024, height: 1024 },
       format: 'jpeg',
     });
@@ -265,7 +265,7 @@ export class GamesController {
     }
 
     // Store the file path (format: game/{gameId}/social-photo.jpg) in database
-    const updatedGame = await this.gamesService.updateSocialPhoto(+gameId, filePath);
+    const updatedGame = await this.gamesService.updateSocialPhoto(gameId, filePath);
     await this.gamesGateway.sendGameDataToClients(updatedGame);
 
     return updatedGame;
@@ -277,7 +277,7 @@ export class GamesController {
     @Param("gameId") gameId: string,
     @CurrentUser() user: User,
   ) {
-    const game = await this.gamesService.findOne(+gameId, user);
+    const game = await this.gamesService.findOne(gameId, user);
 
     if (!game) {
       throw new NotFoundException('Game not found');
@@ -288,7 +288,7 @@ export class GamesController {
     }
 
     // Check if user has access to the social photo
-    const hasAccess = await this.gamesService.canAccessGameSocialPhoto(+gameId, user);
+    const hasAccess = await this.gamesService.canAccessGameSocialPhoto(gameId, user);
     if (!hasAccess) {
       throw new ForbiddenException('You do not have access to this social photo');
     }

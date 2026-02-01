@@ -43,7 +43,7 @@ export class TeamRequestsController {
     @CurrentUser() user: User
   ) {
     return this.teamRequestsService.acceptTeamRequest(
-      +params.teamRequestId,
+      params.teamRequestId,
       user
     );
   }
@@ -55,7 +55,7 @@ export class TeamRequestsController {
     @CurrentUser() user: User
   ) {
     return this.teamRequestsService.rejectTeamRequest(
-      +params.teamRequestId,
+      params.teamRequestId,
       user
     );
   }
@@ -66,6 +66,6 @@ export class TeamRequestsController {
     @Param() params: TeamRequestParamDto,
     @CurrentUser() user: User
   ) {
-    return this.teamRequestsService.remove(+params.teamRequestId, user);
+    return this.teamRequestsService.remove(params.teamRequestId, user);
   }
 }

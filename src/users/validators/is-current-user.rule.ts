@@ -11,11 +11,11 @@ import { User } from "../entities/user.entity";
 export class IsCurrentUserRule implements ValidatorConstraintInterface {
   constructor() {}
 
-  async validate(id: number, validationArguments: ValidationArguments) {
+  async validate(id: string, validationArguments: ValidationArguments) {
     const user = (validationArguments.object as Record<string, any>)?.context
       ?.user as User;
 
-    return !!user && !!id && Number(id) === user.id;
+    return !!user && !!id && id === user.id;
   }
 
   defaultMessage(validationArguments?: ValidationArguments): string {

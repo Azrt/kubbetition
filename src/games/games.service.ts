@@ -58,12 +58,12 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(savedGame.id);
   }
 
-  async updateSocialPhoto(id: number, photoUrl: string) {
+  async updateSocialPhoto(id: string, photoUrl: string) {
     await this.gamesRepository.update(id, { socialPhoto: photoUrl });
     return this.findOne(id);
   }
 
-  async endGame(id: number) {
+  async endGame(id: string) {
     await this.gamesRepository.update(id, {
       endTime: new Date(),
     });
@@ -78,7 +78,7 @@ export class GamesService implements GamesServiceInterface {
     return game;
   }
 
-  async startGame(id: number) {
+  async startGame(id: string) {
     await this.gamesRepository.update(id, {
       startTime: new Date(),
     });
@@ -89,15 +89,14 @@ export class GamesService implements GamesServiceInterface {
   private eventParticipantWhereClause(): string {
     // Checks whether event.participants (json) contains userId in any inner team array.
     // Assumes Postgres jsonb.
-    // Use jsonb_array_elements_text to extract array elements as text, then cast and compare
-    // Cast :userId to INTEGER explicitly to avoid parameter type inference issues
+    // Use jsonb_array_elements_text to extract array elements as text, then compare as UUID
     return `EXISTS (
       SELECT 1
       FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) team
       WHERE EXISTS (
         SELECT 1
         FROM jsonb_array_elements_text(team) user_id_text
-        WHERE user_id_text::int = CAST(:userId AS INTEGER)
+        WHERE user_id_text::uuid = CAST(:userId AS UUID)
       )
     )`;
   }
@@ -132,7 +131,7 @@ export class GamesService implements GamesServiceInterface {
     } as any);
   }
 
-  async findOne(id: number, currentUser?: User) {
+  async findOne(id: string, currentUser?: User) {
     const game = await this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
       where: { id },
@@ -164,7 +163,7 @@ export class GamesService implements GamesServiceInterface {
     return game;
   }
 
-  async cancelGame(id: number) {
+  async cancelGame(id: string) {
     const game = await this.findOne(id);
     
     await this.gamesRepository.save({
@@ -180,7 +179,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(id);
   }
 
-  async update(id: number, updateGameDto: UpdateGameDto, user: User) {
+  async update(id: string, updateGameDto: UpdateGameDto, user: User) {
     const game = await this.findOne(id);
 
     if (!game) {
@@ -216,7 +215,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(savedGame.id);
   }
 
-  remove(id: number) {
+  remove(id: string) {
     return `This action removes a #${id} game`;
   }
 
@@ -232,7 +231,7 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
-  async findUserHistory(userId: number, query?: PaginateQuery): Promise<Paginated<Game>> {
+  async findUserHistory(userId: string, query?: PaginateQuery): Promise<Paginated<Game>> {
     const page = query?.page ?? 1;
     const limit = query?.limit ?? 10;
     const cacheKey = RedisService.gameHistoryKey(userId, page, limit);
@@ -275,7 +274,7 @@ export class GamesService implements GamesServiceInterface {
   }
 
   // Team operations
-  async joinTeam(gameId: number, team: 1 | 2, user: User) {
+  async joinTeam(gameId: string, team: 1 | 2, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -312,7 +311,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(gameId);
   }
 
-  async leaveTeam(gameId: number, user: User) {
+  async leaveTeam(gameId: string, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -337,7 +336,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(gameId);
   }
 
-  async setTeamReady(gameId: number, team: 1 | 2, user: User) {
+  async setTeamReady(gameId: string, team: 1 | 2, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -371,7 +370,7 @@ export class GamesService implements GamesServiceInterface {
     return updatedGame;
   }
 
-  async updateTeamScore(gameId: number, team: 1 | 2, score: number, user: User) {
+  async updateTeamScore(gameId: string, team: 1 | 2, score: number, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -466,7 +465,7 @@ export class GamesService implements GamesServiceInterface {
 
   // Invalidate history cache for all game participants
   private async invalidateHistoryCacheForGame(game: Game) {
-    const userIds = new Set<number>();
+    const userIds = new Set<string>();
     
     game.team1Members?.forEach(m => userIds.add(m.id));
     game.team2Members?.forEach(m => userIds.add(m.id));
@@ -486,7 +485,7 @@ export class GamesService implements GamesServiceInterface {
    * 3. User is a team member of any participant (if participant has a team assigned)
    * 4. User is an admin/superadmin
    */
-  async canAccessGameSocialPhoto(gameId: number, user: User): Promise<boolean> {
+  async canAccessGameSocialPhoto(gameId: string, user: User): Promise<boolean> {
     // Admins always have access
     if (isAdminRole(user)) {
       return true;
@@ -498,7 +497,7 @@ export class GamesService implements GamesServiceInterface {
     }
 
     // Collect all participant IDs
-    const participantIds = new Set<number>();
+    const participantIds = new Set<string>();
     game.participants?.forEach(p => participantIds.add(p.id));
     game.team1Members?.forEach(m => participantIds.add(m.id));
     game.team2Members?.forEach(m => participantIds.add(m.id));

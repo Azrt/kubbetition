@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { IsOptional, IsString, IsUUID, IsBoolean } from "class-validator";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString } from "class-validator";
 
 export class SearchUsersDto {
   @ApiProperty({ required: false, description: "Search by email (partial match)" })
@@ -15,7 +15,12 @@ export class SearchUsersDto {
 
   @ApiProperty({ required: false, description: "Search by team ID" })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  teamId?: number;
+  @IsUUID()
+  teamId?: string;
+
+  @ApiProperty({ required: false, description: "Exclude users with any friend request status" })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  excludeWithFriendRequest?: boolean;
 }

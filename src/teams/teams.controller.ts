@@ -58,7 +58,7 @@ export class TeamsController {
   @Get(":teamId")
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("teamId") teamId: string) {
-    return this.teamsService.findOne(+teamId);
+    return this.teamsService.findOne(teamId);
   }
 
   @Patch(":teamId")
@@ -69,7 +69,7 @@ export class TeamsController {
     @Param("teamId") teamId: string,
     @Body() updateTeamDto: UpdateTeamMembersDto
   ) {
-    return this.teamsService.update(+teamId, updateTeamDto);
+    return this.teamsService.update(teamId, updateTeamDto);
   }
 
   @Post(":teamId/logo")
@@ -80,25 +80,25 @@ export class TeamsController {
     @Param("teamId") teamId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const filePath = await this.fileUploadService.uploadFile(file, FileType.TEAM_LOGO, +teamId, {
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.TEAM_LOGO, teamId, {
       resize: { width: 300 },
       format: 'jpeg',
     });
 
     // Delete old logo if exists
-    const team = await this.teamsService.findOne(+teamId);
+    const team = await this.teamsService.findOne(teamId);
     if (team?.logo) {
       await this.fileUploadService.deleteFile(team.logo, FileType.TEAM_LOGO);
     }
 
     // Store the file path (format: team/{teamId}/logo.jpg) in database
-    return this.teamsService.updateLogo(+teamId, filePath);
+    return this.teamsService.updateLogo(teamId, filePath);
   }
 
   @Delete(":teamId")
   @UseGuards(SameTeamGuard)
   @IncludeAdminRoles(Role.SUPERVISOR)
   remove(@Param("teamId") teamId: string, @CurrentUser() user: User) {
-    return this.teamsService.remove(+teamId, user);
+    return this.teamsService.remove(teamId, user);
   }
 }

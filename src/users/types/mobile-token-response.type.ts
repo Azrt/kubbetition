@@ -1,4 +1,4 @@
 export interface MobileTokenResponse {
-  id: number
+  id: string
   token: string | null
 }

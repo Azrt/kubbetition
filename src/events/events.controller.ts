@@ -4,7 +4,6 @@ import {
   Post,
   Body,
   Param,
-  ParseIntPipe,
   Request,
   Patch,
   Delete,
@@ -71,7 +70,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getGames(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.getGames(eventId, req.user);
@@ -93,7 +92,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getRanking(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Query('round') round?: string,
     @Request() req?: RequestWithUser,
   ): Promise<RankingEntryDto[]> {
@@ -111,7 +110,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getActiveGames(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.getActiveGames(eventId, req.user);
@@ -126,7 +125,7 @@ export class EventsController {
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Request() req: RequestWithUser,
   ): Promise<Event> {
     return this.eventsService.findOneVisible(id, req.user);
@@ -142,7 +141,7 @@ export class EventsController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async join(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Body() body: JoinEventDto,
     @Request() req: RequestWithUser,
   ): Promise<Event> {
@@ -160,7 +159,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - only event creator can start rounds' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async startRound(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Body() startRoundDto: StartRoundDto,
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
@@ -178,7 +177,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - only admin, superadmin, or event creator can end rounds' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async endRound(
-    @Param('id', ParseIntPipe) eventId: number,
+    @Param('id') eventId: string,
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.endRound(eventId, req.user);
@@ -193,7 +192,7 @@ export class EventsController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async update(@Param('id', ParseIntPipe) eventId: number, @Body() updateEventDto: UpdateEventDto, @Request() req: RequestWithUser): Promise<Event> {
+  async update(@Param('id') eventId: string, @Body() updateEventDto: UpdateEventDto, @Request() req: RequestWithUser): Promise<Event> {
     return this.eventsService.update(eventId, updateEventDto, req.user);
   }
 
@@ -206,7 +205,7 @@ export class EventsController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async leave(@Param('id', ParseIntPipe) eventId: number, @Request() req: RequestWithUser): Promise<Event> {
+  async leave(@Param('id') eventId: string, @Request() req: RequestWithUser): Promise<Event> {
     return this.eventsService.leave(eventId, req.user);
   }
 
@@ -218,7 +217,7 @@ export class EventsController {
     type: Event,
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async delete(@Param('id', ParseIntPipe) eventId: number, @Request() req: RequestWithUser): Promise<void> {
+  async delete(@Param('id') eventId: string, @Request() req: RequestWithUser): Promise<void> {
     return this.eventsService.delete(eventId, req.user);
   }
 }

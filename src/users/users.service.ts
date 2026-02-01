@@ -29,7 +29,18 @@ export class UsersService {
     return this.usersRepository.find({ relations: ['team'] });
   }
 
-  async search(email?: string, lastName?: string, teamId?: number) {
+  async search(
+    email?: string,
+    lastName?: string,
+    teamName?: string,
+    excludeWithFriendRequest?: boolean,
+    currentUser?: User
+  ) {
+    // Return empty array if no search params provided
+    if (!email && !lastName && teamName === undefined) {
+      return [];
+    }
+
     const queryBuilder = this.usersRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.team', 'team');
@@ -42,14 +53,37 @@ export class UsersService {
       queryBuilder.andWhere('user.lastName LIKE :lastName', { lastName: `%${lastName}%` });
     }
 
-    if (teamId !== undefined) {
-      queryBuilder.andWhere('team.id = :teamId', { teamId });
+    if (teamName !== undefined) {
+      queryBuilder.andWhere('team.name = :teamName', { teamName });
     }
 
-    return queryBuilder.getMany();
+    // Exclude users with any friend request status if requested
+    if (excludeWithFriendRequest && currentUser) {
+      const friendRequests = await this.friendRequestsRepository.find({
+        where: [
+          { requester: { id: currentUser.id } },
+          { recipient: { id: currentUser.id } },
+        ],
+        relations: ['requester', 'recipient'],
+      });
+
+      const excludedUserIds = friendRequests.map((fr) =>
+        fr.requester.id === currentUser.id ? fr.recipient.id : fr.requester.id
+      );
+
+      if (excludedUserIds.length > 0) {
+        queryBuilder.andWhere('user.id NOT IN (:...excludedUserIds)', {
+          excludedUserIds,
+        });
+      }
+    }
+
+    const take = teamName && !email && !lastName ? undefined : 10;
+
+    return queryBuilder.take(take).getMany();
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return this.usersRepository.findOne({
       where: { 
         id,
@@ -58,7 +92,7 @@ export class UsersService {
     });
   }
 
-  findFriendRequest(id: number) {
+  findFriendRequest(id: string) {
     return this.friendRequestsRepository.findOne({
       where: { id },
       relations: ['requester', 'recipient'],
@@ -69,7 +103,7 @@ export class UsersService {
     return this.usersRepository.findOneBy({ email });
   }
 
-  findByIds(ids: Array<number>, team?: number) {
+  findByIds(ids: Array<string>, team?: string) {
     return this.usersRepository.find({
       relations: ['team'],
       where: {
@@ -81,7 +115,7 @@ export class UsersService {
     });
   }
 
-  getMobileTokens(ids: Array<number>): Promise<Array<MobileTokenResponse>> {
+  getMobileTokens(ids: Array<string>): Promise<Array<MobileTokenResponse>> {
     return this.usersRepository
       .createQueryBuilder('user')
       .select(['user.id AS id', 'user.mobileToken AS token'])
@@ -89,13 +123,13 @@ export class UsersService {
       .getRawMany();
   }
 
-  uploadImage(id: number, image: string) {
+  uploadImage(id: string, image: string) {
     return this.usersRepository.update(id, {
       image,
     });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
+  async update(id: string, updateUserDto: UpdateUserDto) {
     const team = await this.teamsService.findOne(updateUserDto.team);
     return this.usersRepository.save({
       ...updateUserDto,
@@ -113,13 +147,13 @@ export class UsersService {
     );
   }
 
-  remove(id: number) {
+  remove(id: string) {
     return this.usersRepository.delete({ id });
   }
 
-  async updateCurrentUserToken(id: number, params: UpdateUserTokenDto) {
+  async updateCurrentUserToken(id: string, params: UpdateUserTokenDto) {
     const userToUpdate = this.usersRepository.create({
-      id: Number(id),
+      id: id,
       mobileToken: params.token,
     });
 
@@ -196,7 +230,7 @@ export class UsersService {
       relations: ['requester', 'recipient'],
     });
 
-    const friendsById = new Map<number, User>();
+    const friendsById = new Map<string, User>();
 
     friendRequests.forEach((request) => {
       const friend =
@@ -210,7 +244,7 @@ export class UsersService {
     return Array.from(friendsById.values());
   }
 
-  async acceptFriendRequest(id: number, user: User) {
+  async acceptFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {
@@ -233,7 +267,7 @@ export class UsersService {
     return this.friendRequestsRepository.save(updatedFriendRequest);
   }
 
-  async rejectFriendRequest(id: number, user: User) {
+  async rejectFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {
@@ -276,7 +310,7 @@ export class UsersService {
     });
   }
 
-  async deleteFriendRequest(id: number, user: User) {
+  async deleteFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {

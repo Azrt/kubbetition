@@ -18,9 +18,9 @@ export class Event extends Common {
   image: string;
 
   // Participants stored as array of arrays of user IDs
-  // Example: [[1, 2], [3, 4]] for 2v2, where each inner array is a team
+  // Example: [["uuid1", "uuid2"], ["uuid3", "uuid4"]] for 2v2, where each inner array is a team
   @Column({ type: 'json', nullable: true })
-  participants: Array<Array<number>>;
+  participants: Array<Array<string>>;
 
   @Column({ length: 500 })
   details: string;
