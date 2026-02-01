@@ -16,6 +16,7 @@ import {
   REFRESH_TOKEN_EXPIRATION,
 } from 'src/app.constants';
 import { GeolocationService } from 'src/common/services/geolocation.service';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly geolocationService: GeolocationService,
+    private readonly fileUploadService: FileUploadService,
   ) {
     this.clientId = this.configService.get("GOOGLE_CLIENT_ID");
     this.clientSecret = this.configService.get("GOOGLE_SECRET");
@@ -175,7 +177,36 @@ export class AuthService {
         }
       }
 
+      // Create user first to get the user ID
       const newUser = await this.usersService.create(user);
+
+      // Upload Google avatar to S3 if image URL is provided
+      if (user.image) {
+        try {
+          const avatarPath = await this.fileUploadService.uploadFromUrl(
+            user.image,
+            FileType.USER_AVATAR,
+            newUser.id,
+            {
+              resize: { width: 600, height: 600 },
+              format: 'jpeg',
+            },
+          );
+
+          // Update user entity with the uploaded avatar path
+          await this.usersService.uploadImage(newUser.id, avatarPath);
+
+          // Fetch the updated user to ensure we return the latest data
+          const updatedUser = await this.usersService.findOne(newUser.id);
+          if (updatedUser) {
+            return updatedUser;
+          }
+        } catch (error) {
+          // Log error but don't fail user registration if avatar upload fails
+          console.error('Failed to upload user avatar from Google:', error);
+          // Continue with user creation even if avatar upload fails
+        }
+      }
 
       return newUser;
     } catch {

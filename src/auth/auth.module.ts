@@ -18,6 +18,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { JwtMiddleware } from './middleware/jwt.middleware';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { GamesModule } from 'src/games/games.module';
+import { FileUploadModule } from 'src/common/modules/file-upload.module';
 
 const globalGuards = [
   {
@@ -40,6 +41,7 @@ const globalGuards = [
     PassportModule,
     TypeOrmModule.forFeature([User, Team, FriendRequest]),
     forwardRef(() => GamesModule),
+    FileUploadModule,
   ],
   controllers: [AuthController],
   providers: [

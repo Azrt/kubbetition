@@ -33,6 +33,17 @@ export class FileUploadService {
   // Long TTL for game photos (1 year in seconds) since they don't change
   private readonly GAME_PHOTO_TTL = 31536000; // 365 * 24 * 60 * 60
 
+  // Allowed MIME types for image uploads
+  private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+
+  // Mapping of file types to their base filenames
+  private readonly FILE_TYPE_BASE_NAMES: Record<FileType, string> = {
+    [FileType.USER_AVATAR]: 'avatar',
+    [FileType.TEAM_LOGO]: 'logo',
+    [FileType.GAME_PHOTO]: 'social-photo',
+    [FileType.EVENT_IMAGE]: 'image',
+  };
+
   constructor(private configService: ConfigService) {
     // Check if S3 is configured
     const awsRegion = this.configService.get<string>('AWS_REGION');
@@ -68,6 +79,163 @@ export class FileUploadService {
     }
   }
 
+  /**
+   * Validate MIME type against allowed types
+   */
+  private validateMimeType(mimeType: string): void {
+    if (!this.ALLOWED_MIME_TYPES.some(type => mimeType.includes(type))) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, and WebP are allowed.');
+    }
+  }
+
+  /**
+   * Process image buffer with sharp (resize and format conversion)
+   */
+  private async processImage(
+    buffer: Buffer,
+    options?: {
+      resize?: { width: number; height?: number };
+      format?: 'png' | 'jpeg' | 'webp';
+    },
+  ): Promise<{ buffer: Buffer; format: 'png' | 'jpeg' | 'webp' }> {
+    let processedFormat: 'png' | 'jpeg' | 'webp' = options?.format || 'jpeg';
+
+    try {
+      let sharpInstance = sharp(buffer);
+
+      // Resize if specified
+      if (options?.resize) {
+        const resizeOptions: sharp.ResizeOptions = {
+          width: options.resize.width,
+          height: options.resize.height,
+          fit: 'inside',
+          withoutEnlargement: true,
+        };
+        sharpInstance = sharpInstance.resize(resizeOptions);
+      }
+
+      // Convert format
+      let processedBuffer: Buffer;
+      if (processedFormat === 'png') {
+        processedBuffer = await sharpInstance.png().toBuffer();
+      } else if (processedFormat === 'webp') {
+        processedBuffer = await sharpInstance.webp().toBuffer();
+      } else {
+        processedBuffer = await sharpInstance.jpeg({ quality: 90 }).toBuffer();
+        processedFormat = 'jpeg';
+      }
+
+      return { buffer: processedBuffer, format: processedFormat };
+    } catch (error) {
+      throw new BadRequestException('Failed to process image');
+    }
+  }
+
+  /**
+   * Generate filename with hash for cache invalidation
+   */
+  private generateFilename(
+    buffer: Buffer,
+    fileType: FileType,
+    format: 'png' | 'jpeg' | 'webp',
+    customFilename?: string,
+  ): string {
+    // Generate hash of the processed image content for cache invalidation
+    const fileHash = crypto.createHash('sha256').update(buffer as any).digest('hex').substring(0, 16);
+    
+    // Generate filename based on file type
+    const fileExtension = format === 'jpeg' ? 'jpg' : format;
+    
+    if (customFilename) {
+      const nameWithoutExt = customFilename.replace(/\.[^/.]+$/, '');
+      return `${nameWithoutExt}.${fileHash}.${fileExtension}`;
+    }
+
+    // Get base name from mapping or generate random
+    const baseName = this.FILE_TYPE_BASE_NAMES[fileType] || crypto.randomBytes(8).toString('hex');
+    return `${baseName}.${fileHash}.${fileExtension}`;
+  }
+
+  /**
+   * Get S3 client instance
+   */
+  private getS3Client() {
+    const AWS = require('aws-sdk');
+    return new AWS.S3({
+      region: this.s3Config!.region,
+      accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
+      secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
+    });
+  }
+
+  /**
+   * Get bucket name based on file type (public or private)
+   */
+  private getBucketName(fileType: FileType): string {
+    if (!this.s3Config) {
+      throw new Error('S3 not configured');
+    }
+    const isPrivate = this.PRIVATE_FILE_TYPES.includes(fileType);
+    return isPrivate ? this.s3Config.privateBucket : this.s3Config.publicBucket;
+  }
+
+  /**
+   * Upload an image from a URL (e.g., Google avatar)
+   * Downloads the image, processes it, and uploads to S3 or local storage
+   */
+  async uploadFromUrl(
+    imageUrl: string,
+    fileType: FileType,
+    entityId: number,
+    options?: {
+      resize?: { width: number; height?: number };
+      format?: 'png' | 'jpeg' | 'webp';
+      filename?: string;
+    },
+  ): Promise<string> {
+    if (!imageUrl) {
+      throw new BadRequestException('No image URL provided');
+    }
+
+    try {
+      // Download image from URL
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new BadRequestException(`Failed to download image from URL: ${response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Validate MIME type
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      this.validateMimeType(contentType);
+
+      // Process image with sharp
+      const { buffer: processedBuffer, format: processedFormat } = await this.processImage(buffer, {
+        resize: options?.resize,
+        format: options?.format,
+      });
+
+      // Generate filename
+      const filename = this.generateFilename(processedBuffer, fileType, processedFormat, options?.filename);
+
+      // Determine if file should be private (based on file type)
+      const isPrivate = this.PRIVATE_FILE_TYPES.includes(fileType);
+
+      if (this.useS3 && this.s3Config) {
+        return this.uploadToS3(processedBuffer, filename, fileType, entityId, processedFormat, isPrivate);
+      } else {
+        return this.uploadLocally(processedBuffer, filename, fileType, entityId, processedFormat);
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to upload image from URL: ${error.message}`);
+    }
+  }
+
   async uploadFile(
     file: Express.Multer.File,
     fileType: FileType,
@@ -83,75 +251,16 @@ export class FileUploadService {
     }
 
     // Validate file type
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPEG, PNG, and WebP are allowed.');
-    }
+    this.validateMimeType(file.mimetype);
 
     // Process image with sharp
-    let processedBuffer = file.buffer;
-    let processedFormat: 'png' | 'jpeg' | 'webp' = options?.format || 'jpeg';
+    const { buffer: processedBuffer, format: processedFormat } = await this.processImage(file.buffer, {
+      resize: options?.resize,
+      format: options?.format,
+    });
 
-    try {
-      let sharpInstance = sharp(file.buffer);
-
-      // Resize if specified
-      if (options?.resize) {
-        const resizeOptions: sharp.ResizeOptions = {
-          width: options.resize.width,
-          height: options.resize.height,
-          fit: 'inside',
-          withoutEnlargement: true,
-        };
-        sharpInstance = sharpInstance.resize(resizeOptions);
-      }
-
-      // Convert format
-      if (processedFormat === 'png') {
-        processedBuffer = await sharpInstance.png().toBuffer();
-      } else if (processedFormat === 'webp') {
-        processedBuffer = await sharpInstance.webp().toBuffer();
-      } else {
-        processedBuffer = await sharpInstance.jpeg({ quality: 90 }).toBuffer();
-        processedFormat = 'jpeg';
-      }
-    } catch (error) {
-      throw new BadRequestException('Failed to process image');
-    }
-
-    // Generate hash of the processed image content for cache invalidation
-    // Hash is based on file content, so when file changes, hash changes, enabling cache revalidation
-    const fileHash = crypto.createHash('sha256').update(processedBuffer as any).digest('hex').substring(0, 16);
-    
-    // Generate filename based on file type
-    const fileExtension = processedFormat === 'jpeg' ? 'jpg' : processedFormat;
-    let filename: string;
-    
-    if (options?.filename) {
-      // If custom filename provided, add hash before extension
-      const nameWithoutExt = options.filename.replace(/\.[^/.]+$/, '');
-      filename = `${nameWithoutExt}.${fileHash}.${fileExtension}`;
-    } else {
-      // Default filenames based on file type, with hash included
-      let baseName: string;
-      switch (fileType) {
-        case FileType.USER_AVATAR:
-          baseName = 'avatar';
-          break;
-        case FileType.TEAM_LOGO:
-          baseName = 'logo';
-          break;
-        case FileType.GAME_PHOTO:
-          baseName = 'social-photo';
-          break;
-        case FileType.EVENT_IMAGE:
-          baseName = 'image';
-          break;
-        default:
-          baseName = crypto.randomBytes(8).toString('hex');
-      }
-      filename = `${baseName}.${fileHash}.${fileExtension}`;
-    }
+    // Generate filename
+    const filename = this.generateFilename(processedBuffer, fileType, processedFormat, options?.filename);
 
     // Determine if file should be private (based on file type)
     const isPrivate = this.PRIVATE_FILE_TYPES.includes(fileType);
@@ -171,26 +280,13 @@ export class FileUploadService {
     format: string,
     isPrivate: boolean,
   ): Promise<string> {
-    if (!this.s3Config) {
-      throw new Error('S3 not configured');
-    }
-
-    // Determine bucket based on file type
-    const bucketName = isPrivate ? this.s3Config.privateBucket : this.s3Config.publicBucket;
-    
     // Build key with prefix: /{fileType}/{entityId}/{filename}
     const key = `${fileType}/${entityId}/${filename}`;
     const contentType = `image/${format === 'jpeg' ? 'jpeg' : format}`;
+    const bucketName = this.getBucketName(fileType);
 
     try {
-      // Use AWS SDK v2 style (if aws-sdk is installed) or implement with fetch
-      // For now, we'll use a simple approach with the AWS SDK
-      const AWS = require('aws-sdk');
-      const s3 = new AWS.S3({
-        region: this.s3Config.region,
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
-      });
+      const s3 = this.getS3Client();
 
       const uploadParams: any = {
         Bucket: bucketName,
@@ -199,10 +295,6 @@ export class FileUploadService {
         ContentType: contentType,
       };
 
-      // Only set ACL if not private (private objects don't need ACL)
-      if (!isPrivate) {
-        uploadParams.ACL = 'public-read';
-      }
 
       await s3.upload(uploadParams).promise();
 
@@ -211,7 +303,7 @@ export class FileUploadService {
       // We'll use the key format: {fileType}/{entityId}/{filename}
       return key;
     } catch (error) {
-      throw new BadRequestException('Failed to upload file to S3');
+      throw new BadRequestException(`Failed to upload file to S3 ${error.message}`);
     }
   }
 
@@ -298,17 +390,8 @@ export class FileUploadService {
     }
 
     try {
-      // filePath is in format: {fileType}/{entityId}/{filename}
-      // Determine bucket based on file type
-      const isPrivate = this.PRIVATE_FILE_TYPES.includes(fileType);
-      const bucketName = isPrivate ? this.s3Config.privateBucket : this.s3Config.publicBucket;
-
-      const AWS = require('aws-sdk');
-      const s3 = new AWS.S3({
-        region: this.s3Config.region,
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
-      });
+      const bucketName = this.getBucketName(fileType);
+      const s3 = this.getS3Client();
 
       await s3
         .deleteObject({
@@ -365,17 +448,8 @@ export class FileUploadService {
     const shouldUseCloudflare = useCloudflare ?? (fileType === FileType.GAME_PHOTO && this.cloudflareConfig !== null);
 
     try {
-      // filePath is in format: {fileType}/{entityId}/{filename}
-      // Determine bucket based on file type
-      const isPrivate = this.PRIVATE_FILE_TYPES.includes(fileType);
-      const bucketName = isPrivate ? this.s3Config.privateBucket : this.s3Config.publicBucket;
-
-      const AWS = require('aws-sdk');
-      const s3 = new AWS.S3({
-        region: this.s3Config.region,
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
-      });
+      const bucketName = this.getBucketName(fileType);
+      const s3 = this.getS3Client();
 
       // Generate presigned URL from S3
       const presignedUrl = s3.getSignedUrl('getObject', {
