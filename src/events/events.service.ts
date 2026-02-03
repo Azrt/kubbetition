@@ -16,6 +16,8 @@ import { isAdminRole } from 'src/common/helpers/user';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { FriendRequestStatus } from 'src/users/enums/friend-request-status.enum';
+import { EventInvitation } from './entities/event-invitation.entity';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 
 @Injectable()
 export class EventsService {
@@ -28,11 +30,114 @@ export class EventsService {
     private gamesRepository: Repository<Game>,
     @InjectRepository(FriendRequest)
     private friendRequestsRepository: Repository<FriendRequest>,
+    @InjectRepository(EventInvitation)
+    private eventInvitationsRepository: Repository<EventInvitation>,
+    private fileUploadService: FileUploadService,
   ) {}
 
   private isParticipant(event: EventEntity, userId: string): boolean {
     const teams = event.participants || [];
     return teams.some((team) => Array.isArray(team) && team.includes(userId));
+  }
+
+  private async hasInvitation(eventId: string, userId: string): Promise<boolean> {
+    const invitation = await this.eventInvitationsRepository.findOne({
+      where: {
+        event: { id: eventId },
+        user: { id: userId },
+      },
+    });
+    return !!invitation;
+  }
+
+  /**
+   * Check if user can view the event
+   * User can view if: event is public OR user is admin OR user is creator OR user has invitation
+   */
+  private async canViewEvent(event: EventEntity, currentUser: User): Promise<boolean> {
+    // Public events are always visible
+    if (event.isPublic) return true;
+    
+    // Admins can see all events
+    if (isAdminRole(currentUser)) return true;
+    
+    // User is the creator
+    if (event.createdBy.id === currentUser.id) return true;
+    
+    // User has an invitation
+    if (await this.hasInvitation(event.id, currentUser.id)) return true;
+    
+    return false;
+  }
+
+  /**
+   * Add presigned URL for event image
+   * Optimized for single event retrieval with longer expiration and Cloudflare CDN support
+   * @param event The event to add presigned URL to
+   * @param expiresIn Expiration time in seconds (default: 24 hours for single event)
+   * @returns Event with imageUrl property added
+   */
+  private async addImageUrl(
+    event: EventEntity, 
+    expiresIn: number = 86400, // 24 hours for single event views
+  ): Promise<EventEntity & { imageUrl: string | null }> {
+    let imageUrl: string | null = null;
+    
+    if (event.image) {
+      try {
+        // Use Cloudflare CDN if available for better caching and performance
+        imageUrl = await this.fileUploadService.getPresignedUrl(
+          event.image,
+          FileType.EVENT_IMAGE,
+          expiresIn,
+          true, // useCloudflare - enable CDN for better caching
+        );
+      } catch (error) {
+        // Log but don't fail if presigned URL generation fails
+        // This ensures the event is still returned even if image URL generation fails
+        console.error(`Failed to generate presigned URL for event ${event.id}:`, error);
+      }
+    }
+    
+    return { ...event, imageUrl };
+  }
+
+  /**
+   * Add presigned URLs for multiple events in parallel
+   * Optimized for list views with efficient batch processing and Cloudflare CDN support
+   * @param events The events to add presigned URLs to
+   * @param expiresIn Expiration time in seconds (default: 24 hours for list views)
+   * @returns Events with imageUrl property added
+   */
+  private async addImageUrls(
+    events: EventEntity[],
+    expiresIn: number = 86400, // 24 hours for list views
+  ): Promise<Array<EventEntity & { imageUrl: string | null }>> {
+    // Generate all presigned URLs in parallel for optimal performance
+    // Each URL generation is independent, so Promise.all is the most efficient approach
+    const urlPromises = events.map(async (event) => {
+      if (!event.image) {
+        return { ...event, imageUrl: null };
+      }
+      
+      try {
+        // Use Cloudflare CDN if available for better caching and performance
+        const imageUrl = await this.fileUploadService.getPresignedUrl(
+          event.image,
+          FileType.EVENT_IMAGE,
+          expiresIn,
+          true, // useCloudflare - enable CDN for better caching
+        );
+        return { ...event, imageUrl };
+      } catch (error) {
+        // Log but don't fail - return event without imageUrl if generation fails
+        // This ensures the list is still returned even if some image URLs fail
+        console.error(`Failed to generate presigned URL for event ${event.id}:`, error);
+        return { ...event, imageUrl: null };
+      }
+    });
+    
+    return Promise.all(urlPromises);
   }
 
   async join(eventId: string, team: string[], currentUser: User): Promise<EventEntity> {
@@ -58,6 +163,14 @@ export class EventsService {
 
     if (team.length === 0) {
       throw new BadRequestException('Team cannot be empty');
+    }
+
+    // For private events, check if user has invitation or is admin
+    if (!event.isPublic && !isAdminRole(currentUser)) {
+      const hasInvite = await this.hasInvitation(eventId, currentUser.id);
+      if (!hasInvite) {
+        throw new ForbiddenException('You need an invitation to join this private event');
+      }
     }
 
     // Load current user with team and members relation
@@ -184,6 +297,122 @@ export class EventsService {
     return this.eventsRepository.save(updatedEvent);
   }
 
+  /**
+   * Upload an image for an event to the private S3 bucket
+   * Deletes the old image if one exists
+   */
+  async uploadImage(eventId: string, file: Express.Multer.File, currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    const isAdmin = isAdminRole(currentUser);
+
+    if (!isAdmin && !isEventCreator) {
+      throw new ForbiddenException('Only the event creator or admin can upload the event image');
+    }
+
+    // Delete old image if exists
+    if (event.image) {
+      try {
+        await this.fileUploadService.deleteFile(event.image, FileType.EVENT_IMAGE);
+      } catch (error) {
+        // Log but don't fail if old image deletion fails
+        console.error('Failed to delete old event image:', error);
+      }
+    }
+
+    // Upload new image to private S3 bucket
+    const imagePath = await this.fileUploadService.uploadFile(
+      file,
+      FileType.EVENT_IMAGE,
+      eventId,
+      {
+        resize: { width: 1200 }, // Resize to max 1200px width
+        format: 'jpeg', // Convert to JPEG for consistency
+      },
+    );
+
+    // Update event with new image path
+    event.image = imagePath;
+    return this.eventsRepository.save(event);
+  }
+
+  /**
+   * Get a presigned URL for accessing the event image from private S3 bucket
+   */
+  async getImagePresignedUrl(eventId: string, currentUser: User): Promise<{ url: string; expiresIn: number }> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check if user has access to the event
+    if (!(await this.canViewEvent(event, currentUser))) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+
+    if (!event.image) {
+      throw new NotFoundException('Event has no image');
+    }
+
+    // Generate presigned URL with 1 hour expiration
+    const expiresIn = 3600; // 1 hour
+    const url = await this.fileUploadService.getPresignedUrl(
+      event.image,
+      FileType.EVENT_IMAGE,
+      expiresIn,
+    );
+
+    return { url, expiresIn };
+  }
+
+  /**
+   * Delete the event image from S3
+   */
+  async deleteImage(eventId: string, currentUser: User): Promise<EventEntity> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    const isAdmin = isAdminRole(currentUser);
+
+    if (!isAdmin && !isEventCreator) {
+      throw new ForbiddenException('Only the event creator or admin can delete the event image');
+    }
+
+    if (!event.image) {
+      throw new NotFoundException('Event has no image to delete');
+    }
+
+    // Delete from S3
+    await this.fileUploadService.deleteFile(event.image, FileType.EVENT_IMAGE);
+
+    // Update event to remove image reference
+    event.image = null;
+    return this.eventsRepository.save(event);
+  }
+
+  /**
+   * @deprecated Use uploadImage instead for S3 support
+   * Legacy method for setting image URL directly
+   */
   async updateImage(eventId: string, imageUrl: string, currentUser: User): Promise<EventEntity> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
@@ -207,8 +436,12 @@ export class EventsService {
     });
   }
 
-  async create(createEventDto: CreateEventDto, currentUser: User): Promise<EventEntity> {
-    const { gameType, rounds, startTime, joiningTime, isPublic, ...rest } = createEventDto as any;
+  async create(
+    createEventDto: CreateEventDto, 
+    currentUser: User,
+    imageFile?: Express.Multer.File,
+  ): Promise<EventEntity & { imageUrl: string | null }> {
+    const { gameType, rounds, startTime, joiningTime, isPublic, image, ...rest } = createEventDto as any;
 
     const start = new Date(startTime);
     const joining = joiningTime ? new Date(joiningTime) : null;
@@ -230,7 +463,30 @@ export class EventsService {
     });
 
     const savedEvent = await this.eventsRepository.save(event);
-    return Array.isArray(savedEvent) ? savedEvent[0] : savedEvent;
+    const createdEvent = Array.isArray(savedEvent) ? savedEvent[0] : savedEvent;
+
+    // Upload image if provided
+    if (imageFile) {
+      try {
+        const imagePath = await this.fileUploadService.uploadFile(
+          imageFile,
+          FileType.EVENT_IMAGE,
+          createdEvent.id,
+          {
+            resize: { width: 1200 }, // Resize to max 1200px width
+            format: 'jpeg', // Convert to JPEG for consistency
+          },
+        );
+        createdEvent.image = imagePath;
+        await this.eventsRepository.save(createdEvent);
+      } catch (error) {
+        // Log but don't fail event creation if image upload fails
+        console.error('Failed to upload event image during creation:', error);
+      }
+    }
+
+    // Return event with presigned imageUrl
+    return this.addImageUrl(createdEvent);
   }
 
   async startRound(eventId: string, startRoundDto: StartRoundDto, currentUser: User): Promise<Game[]> {
@@ -666,21 +922,72 @@ export class EventsService {
     return event;
   }
 
-  async findOneVisible(id: string, currentUser: User): Promise<EventEntity> {
+  async findOneVisible(id: string, currentUser: User): Promise<EventEntity & { imageUrl: string | null }> {
     const event = await this.findOne(id);
-    if (event.isPublic) return event;
-    if (isAdminRole(currentUser)) return event;
-    if (this.isParticipant(event, currentUser.id)) return event;
-    throw new ForbiddenException('You are not allowed to access this event');
+    
+    if (!(await this.canViewEvent(event, currentUser))) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+    
+    // Add presigned URL for event image
+    return this.addImageUrl(event);
   }
 
-  async findAllVisible(currentUser: User): Promise<EventEntity[]> {
-    const events = await this.eventsRepository.find({
-      relations: ['createdBy', 'games'],
-    });
+  async findAllVisible(
+    currentUser: User, 
+    showArchived: boolean = false,
+  ): Promise<Array<EventEntity & { imageUrl: string | null }>> {
+    let events: EventEntity[];
+    
+    // Get start of today (midnight) for date filtering
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Admins can see all events
+    if (isAdminRole(currentUser)) {
+      const queryBuilder = this.eventsRepository
+        .createQueryBuilder('event')
+        .leftJoinAndSelect('event.createdBy', 'createdBy')
+        .leftJoinAndSelect('event.games', 'games');
+      
+      // Filter by date unless showArchived is true
+      if (!showArchived) {
+        queryBuilder.where('event.startTime >= :today', { today });
+      }
+      
+      events = await queryBuilder.getMany();
+    } else {
+      // Use QueryBuilder for efficient database-level filtering
+      // Fetch: public events OR private events where user is creator OR has invitation
+      const queryBuilder = this.eventsRepository
+        .createQueryBuilder('event')
+        .leftJoinAndSelect('event.createdBy', 'createdBy')
+        .leftJoinAndSelect('event.games', 'games')
+        .leftJoin(
+          'event_invitation',
+          'invitation',
+          'invitation.eventId = event.id AND invitation.userId = :userId',
+          { userId: currentUser.id }
+        );
+      
+      // Build visibility conditions
+      const visibilityConditions = '(event.isPublic = :isPublic OR createdBy.id = :creatorId OR invitation.id IS NOT NULL)';
+      
+      if (!showArchived) {
+        // Filter: (visibility conditions) AND (future or today)
+        queryBuilder
+          .where(visibilityConditions, { isPublic: true, creatorId: currentUser.id })
+          .andWhere('event.startTime >= :today', { today });
+      } else {
+        // No date filter, just visibility
+        queryBuilder.where(visibilityConditions, { isPublic: true, creatorId: currentUser.id });
+      }
+      
+      events = await queryBuilder.getMany();
+    }
 
-    if (isAdminRole(currentUser)) return events;
-    return events.filter((e) => e.isPublic || this.isParticipant(e, currentUser.id));
+    // Add presigned URLs for all events in parallel
+    return this.addImageUrls(events);
   }
 
   async endRound(eventId: string, currentUser: User): Promise<Game[]> {
@@ -750,21 +1057,16 @@ export class EventsService {
     }
 
     // Check if user has access to the event
-    const isEventCreator = event.createdBy.id === currentUser.id;
-    const isAdmin = isAdminRole(currentUser);
-    const isEventParticipant = this.isParticipant(event, currentUser.id);
-
-    if (!isAdmin && !isEventCreator && !isEventParticipant && !event.isPublic) {
+    if (!(await this.canViewEvent(event, currentUser))) {
       throw new ForbiddenException('You are not allowed to access this event');
     }
 
     // If admin, superadmin, or event creator: return all games
-    if (isAdmin || isEventCreator) {
+    if (isAdminRole(currentUser) || event.createdBy.id === currentUser.id) {
       return event.games || [];
     }
 
-    // If only a participant: return only games where currentUser was playing
-    // (user is in game.participants)
+    // For other users with access (invitation): return only games where currentUser was playing
     return (event.games || []).filter((game) =>
       game.participants?.some((participant) => participant.id === currentUser.id),
     );
@@ -781,7 +1083,7 @@ export class EventsService {
     }
 
     // Check visibility
-    if (!event.isPublic && !isAdminRole(currentUser) && !this.isParticipant(event, currentUser.id)) {
+    if (!(await this.canViewEvent(event, currentUser))) {
       throw new ForbiddenException('You are not allowed to access this event');
     }
 
@@ -807,14 +1109,8 @@ export class EventsService {
     }
 
     // Check visibility if currentUser is provided
-    if (currentUser) {
-      const isEventCreator = event.createdBy.id === currentUser.id;
-      const isAdmin = isAdminRole(currentUser);
-      const isEventParticipant = this.isParticipant(event, currentUser.id);
-
-      if (!isAdmin && !isEventCreator && !isEventParticipant && !event.isPublic) {
-        throw new ForbiddenException('You are not allowed to access this event');
-      }
+    if (currentUser && !(await this.canViewEvent(event, currentUser))) {
+      throw new ForbiddenException('You are not allowed to access this event');
     }
 
     // Validate round parameter
@@ -1001,6 +1297,103 @@ export class EventsService {
 
     event.participants = event.participants?.filter((team) => !team.includes(currentUser.id));
     return this.eventsRepository.save(event);
+  }
+
+  async sendInvitation(eventId: string, userId: string, currentUser: User): Promise<EventInvitation> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Only event creator or admin can send invitations
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    if (!isEventCreator && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only event creator or admin can send invitations');
+    }
+
+    // Check if user exists
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Check if invitation already exists
+    const existingInvitation = await this.eventInvitationsRepository.findOne({
+      where: {
+        event: { id: eventId },
+        user: { id: userId },
+      },
+    });
+
+    if (existingInvitation) {
+      throw new BadRequestException('Invitation already sent to this user');
+    }
+
+    // Create invitation
+    const invitation = this.eventInvitationsRepository.create({
+      event: { id: eventId } as EventEntity,
+      user: { id: userId } as User,
+    });
+
+    return this.eventInvitationsRepository.save(invitation);
+  }
+
+  async deleteInvitation(eventId: string, userId: string, currentUser: User): Promise<void> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Only event creator, admin, or the invited user can delete invitation
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    const isInvitedUser = currentUser.id === userId;
+    
+    if (!isEventCreator && !isAdminRole(currentUser) && !isInvitedUser) {
+      throw new ForbiddenException('You are not allowed to delete this invitation');
+    }
+
+    const invitation = await this.eventInvitationsRepository.findOne({
+      where: {
+        event: { id: eventId },
+        user: { id: userId },
+      },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    await this.eventInvitationsRepository.remove(invitation);
+  }
+
+  async getEventInvitations(eventId: string, currentUser: User): Promise<EventInvitation[]> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Only event creator or admin can see invitations
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    if (!isEventCreator && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only event creator or admin can view invitations');
+    }
+
+    return this.eventInvitationsRepository.find({
+      where: { event: { id: eventId } },
+      relations: ['user'],
+    });
   }
 
   async delete(eventId: string, currentUser: User): Promise<void> {

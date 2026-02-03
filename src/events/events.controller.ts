@@ -10,9 +10,10 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { StartRoundDto } from './dto/start-round.dto';
@@ -24,6 +25,8 @@ import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { RankingEntryDto } from './dto/ranking-response.dto';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { SendInvitationDto } from './dto/send-invitation.dto';
+import { EventInvitation } from './entities/event-invitation.entity';
 
 @ApiTags('events')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -35,7 +38,28 @@ export class EventsController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new event' })
+  @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({ summary: 'Create a new event (accepts form data with optional image)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name', 'details', 'gameType', 'rounds', 'startTime'],
+      properties: {
+        name: { type: 'string', description: 'Event name', example: 'Summer Tournament' },
+        details: { type: 'string', description: 'Event details', example: 'Annual summer tournament' },
+        gameType: { type: 'number', description: 'Game type (1=1v1, 2=2v2, etc.)', example: 2 },
+        rounds: { type: 'number', description: 'Number of rounds', example: 3 },
+        startTime: { type: 'string', format: 'date-time', description: 'Event start time', example: '2024-12-31T10:00:00Z' },
+        joiningTime: { type: 'string', format: 'date-time', description: 'Last time to join (optional)' },
+        location: { type: 'string', description: 'Location as point (x, y)', example: '(16.93, 52.40)' },
+        roundDuration: { type: 'number', description: 'Round duration in minutes', example: 20 },
+        tournamentMode: { type: 'boolean', description: 'Enable tournament mode' },
+        isPublic: { type: 'boolean', description: 'Whether event is public', default: true },
+        image: { type: 'string', format: 'binary', description: 'Event image (JPEG, PNG, or WebP)' },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Event created successfully',
@@ -44,20 +68,32 @@ export class EventsController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   async create(
     @Body() createEventDto: CreateEventDto,
+    @UploadedFile() image: Express.Multer.File,
     @Request() req: RequestWithUser,
-  ): Promise<Event> {
-    return this.eventsService.create(createEventDto, req.user);
+  ): Promise<Event & { imageUrl: string | null }> {
+    return this.eventsService.create(createEventDto, req.user, image);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all events' })
+  @ApiOperation({ summary: 'Get all events (includes presigned imageUrl for each event). By default returns only future events and events from today.' })
+  @ApiQuery({
+    name: 'showArchived',
+    required: false,
+    type: Boolean,
+    description: 'If true, includes past events. Default: false (only future events and today\'s events)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of events',
+    description: 'List of events with presigned image URLs',
     type: [Event],
   })
-  async findAll(@Request() req: RequestWithUser): Promise<Event[]> {
-    return this.eventsService.findAllVisible(req.user);
+  async findAll(
+    @Query('showArchived') showArchived?: string,
+    @Request() req?: RequestWithUser,
+  ): Promise<Array<Event & { imageUrl: string | null }>> {
+    // Convert string to boolean (query params come as strings)
+    const includeArchived = showArchived === 'true';
+    return this.eventsService.findAllVisible(req.user, includeArchived);
   }
 
   @Get(':id/games')
@@ -117,17 +153,17 @@ export class EventsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get event by ID' })
+  @ApiOperation({ summary: 'Get event by ID (includes presigned imageUrl)' })
   @ApiResponse({
     status: 200,
-    description: 'Event details',
+    description: 'Event details with presigned image URL',
     type: Event,
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(
     @Param('id') id: string,
     @Request() req: RequestWithUser,
-  ): Promise<Event> {
+  ): Promise<Event & { imageUrl: string | null }> {
     return this.eventsService.findOneVisible(id, req.user);
   }
 
@@ -219,5 +255,127 @@ export class EventsController {
   @ApiResponse({ status: 404, description: 'Event not found' })
   async delete(@Param('id') eventId: string, @Request() req: RequestWithUser): Promise<void> {
     return this.eventsService.delete(eventId, req.user);
+  }
+
+  @Post(':id/invitations')
+  @ApiOperation({ summary: 'Send an invitation to a user for a private event' })
+  @ApiResponse({
+    status: 201,
+    description: 'Invitation sent successfully',
+    type: EventInvitation,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invitation already exists' })
+  @ApiResponse({ status: 403, description: 'Forbidden - only event creator or admin can send invitations' })
+  @ApiResponse({ status: 404, description: 'Event or user not found' })
+  async sendInvitation(
+    @Param('id') eventId: string,
+    @Body() sendInvitationDto: SendInvitationDto,
+    @Request() req: RequestWithUser,
+  ): Promise<EventInvitation> {
+    return this.eventsService.sendInvitation(eventId, sendInvitationDto.userId, req.user);
+  }
+
+  @Get(':id/invitations')
+  @ApiOperation({ summary: 'Get all invitations for an event' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of invitations',
+    type: [EventInvitation],
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - only event creator or admin can view invitations' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getInvitations(
+    @Param('id') eventId: string,
+    @Request() req: RequestWithUser,
+  ): Promise<EventInvitation[]> {
+    return this.eventsService.getEventInvitations(eventId, req.user);
+  }
+
+  @Delete(':id/invitations/:userId')
+  @ApiOperation({ summary: 'Delete an invitation' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation deleted successfully',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not allowed to delete this invitation' })
+  @ApiResponse({ status: 404, description: 'Event or invitation not found' })
+  async deleteInvitation(
+    @Param('id') eventId: string,
+    @Param('userId') userId: string,
+    @Request() req: RequestWithUser,
+  ): Promise<void> {
+    return this.eventsService.deleteInvitation(eventId, userId, req.user);
+  }
+
+  @Post(':id/image')
+  @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({ summary: 'Upload an image for an event (stored in private S3 bucket)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file (JPEG, PNG, or WebP)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Image uploaded successfully',
+    type: Event,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid file type or no file provided' })
+  @ApiResponse({ status: 403, description: 'Forbidden - only event creator or admin can upload image' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async uploadImage(
+    @Param('id') eventId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: RequestWithUser,
+  ): Promise<Event> {
+    if (!file) {
+      throw new BadRequestException('No image file provided');
+    }
+    return this.eventsService.uploadImage(eventId, file, req.user);
+  }
+
+  @Get(':id/image-url')
+  @ApiOperation({ summary: 'Get a presigned URL to access the event image (private S3 bucket)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned URL generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Presigned URL for accessing the image' },
+        expiresIn: { type: 'number', description: 'URL expiration time in seconds' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Event not found or event has no image' })
+  async getImageUrl(
+    @Param('id') eventId: string,
+    @Request() req: RequestWithUser,
+  ): Promise<{ url: string; expiresIn: number }> {
+    return this.eventsService.getImagePresignedUrl(eventId, req.user);
+  }
+
+  @Delete(':id/image')
+  @ApiOperation({ summary: 'Delete the event image' })
+  @ApiResponse({
+    status: 200,
+    description: 'Image deleted successfully',
+    type: Event,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - only event creator or admin can delete image' })
+  @ApiResponse({ status: 404, description: 'Event not found or event has no image' })
+  async deleteImage(
+    @Param('id') eventId: string,
+    @Request() req: RequestWithUser,
+  ): Promise<Event> {
+    return this.eventsService.deleteImage(eventId, req.user);
   }
 }

@@ -158,13 +158,27 @@ export class FileUploadService {
 
   /**
    * Get S3 client instance
+   * Configured to use AWS Signature Version 4 (required for all S3 buckets)
+   * Explicitly sets the region to match the bucket region
    */
   private getS3Client() {
     const AWS = require('aws-sdk');
+    
+    // Ensure the region is explicitly set (required for presigned URLs)
+    const region = this.s3Config!.region;
+    
+    // Configure global AWS settings to use the correct region
+    AWS.config.update({
+      region: region,
+      signatureVersion: 'v4',
+    });
+    
     return new AWS.S3({
-      region: this.s3Config!.region,
+      region: region, // Explicitly set region for this client
       accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
       secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
+      signatureVersion: 'v4', // Force AWS Signature Version 4
+      useAccelerateEndpoint: false,
     });
   }
 

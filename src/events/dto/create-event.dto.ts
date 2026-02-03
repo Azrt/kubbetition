@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -11,6 +12,13 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { GameType } from 'src/common/enums/gameType';
+
+// Helper to transform string "true"/"false" to boolean
+const ToBoolean = () => Transform(({ value }) => {
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return value;
+});
 
 export class CreateEventDto {
   @ApiProperty({ description: 'Event name', example: 'Summer Tournament' })
@@ -33,6 +41,7 @@ export class CreateEventDto {
     default: true,
   })
   @IsOptional()
+  @ToBoolean()
   @IsBoolean()
   isPublic?: boolean;
 
@@ -46,6 +55,7 @@ export class CreateEventDto {
     enum: GameType,
     example: GameType.TwoVsTwo,
   })
+  @Type(() => Number)
   @IsEnum(GameType)
   gameType: GameType;
 
@@ -55,6 +65,7 @@ export class CreateEventDto {
     minimum: 1,
     maximum: 20,
   })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(20)
@@ -76,6 +87,7 @@ export class CreateEventDto {
     maximum: 60,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(5)
   @Max(60)
@@ -87,6 +99,8 @@ export class CreateEventDto {
     required: false,
   })
   @IsOptional()
+  @ToBoolean()
+  @IsBoolean()
   tournamentMode?: boolean;
 
   @ApiProperty({

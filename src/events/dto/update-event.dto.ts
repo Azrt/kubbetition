@@ -1,7 +1,21 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
+import { Transform, Type } from "class-transformer";
+import { IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
+
+// Helper to transform string "true"/"false" to boolean
+const ToBoolean = () => Transform(({ value }) => {
+  if (value === 'true' || value === true) return true;
+  if (value === 'false' || value === false) return false;
+  return value;
+});
 
 export class UpdateEventDto {
+  @ApiProperty({ description: 'Event name', example: 'Summer Tournament', required: false })
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+
   @ApiProperty({ description: 'Event details', example: 'Annual summer tournament' })
   @IsString()
   @IsNotEmpty()
@@ -14,6 +28,7 @@ export class UpdateEventDto {
     minimum: 1,
     maximum: 20,
   })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(20)
@@ -36,6 +51,7 @@ export class UpdateEventDto {
     maximum: 60,
   })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(5)
   @Max(60)
@@ -47,6 +63,8 @@ export class UpdateEventDto {
     required: false,
   })
   @IsOptional()
+  @ToBoolean()
+  @IsBoolean()
   tournamentMode?: boolean;
 
   @ApiProperty({
