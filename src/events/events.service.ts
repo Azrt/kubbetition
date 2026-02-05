@@ -1200,6 +1200,42 @@ export class EventsService {
     return activeGames;
   }
 
+  async getStatus(
+    eventId: string,
+    currentUser?: User,
+  ): Promise<{ status: 'not started' | 'in progress' | 'finished' }> {
+    const event = await this.eventsRepository.findOne({
+      where: { id: eventId },
+      relations: ['createdBy', 'games'],
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    if (currentUser && !(await this.canViewEvent(event, currentUser))) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+
+    const games = event.games || [];
+    const hasGames = games.length > 0;
+    const now = new Date();
+    const eventNotStarted = event.startTime > now;
+    const hasActiveGames = games.some(
+      (g) =>
+        g.round === event.currentRound && !g.isCancelled && g.endTime === null,
+    );
+    const reachedMaxRounds = event.currentRound >= event.rounds;
+
+    if (!hasGames && eventNotStarted) {
+      return { status: 'not started' };
+    }
+    if (reachedMaxRounds && !hasActiveGames) {
+      return { status: 'finished' };
+    }
+    return { status: 'in progress' };
+  }
+
   async getRanking(eventId: string, round?: number, currentUser?: User) {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
@@ -1340,47 +1376,49 @@ export class EventsService {
       userTournamentPoints.set(userId, tournamentPoints);
     });
 
-    // Calculate opponents strength and create ranking entries
-    const rankings = Array.from(userStats.values()).map((stats) => {
-      // Points field represents pointsFor (total points scored in games)
-      const points = stats.pointsFor;
+    // Map user ID to User for building team members
+    const userMap = new Map(participants.map((p) => [p.id, p]));
 
-      // Calculate opponents strength: sum of all opponents' tournament points
-      let opponentsStrength = 0;
-      stats.opponents.forEach((opponentId) => {
-        const opponentTournamentPoints = userTournamentPoints.get(opponentId) || 0;
-        opponentsStrength += opponentTournamentPoints;
-      });
+    // Build team-based ranking entries (one entry per event team)
+    const teamRankings = (event.participants || [])
+      .map((teamIds) => {
+        const firstMemberStats = teamIds.length > 0 ? userStats.get(teamIds[0]) : null;
+        if (!firstMemberStats) return null;
 
-      return {
-        user: stats.user,
-        points, // This is pointsFor (points scored)
-        wins: stats.wins,
-        draws: stats.draws,
-        losses: stats.losses,
-        opponentsStrength,
-        pointsFor: stats.pointsFor,
-        pointsAgainst: stats.pointsAgainst,
-      };
-    });
+        const members = teamIds.map((id) => userMap.get(id)).filter((u): u is User => u != null);
+
+        let opponentsStrength = 0;
+        firstMemberStats.opponents.forEach((opponentId) => {
+          opponentsStrength += userTournamentPoints.get(opponentId) || 0;
+        });
+
+        return {
+          members,
+          points: firstMemberStats.pointsFor,
+          wins: firstMemberStats.wins,
+          draws: firstMemberStats.draws,
+          losses: firstMemberStats.losses,
+          opponentsStrength,
+          pointsFor: firstMemberStats.pointsFor,
+          pointsAgainst: firstMemberStats.pointsAgainst,
+        };
+      })
+      .filter((e): e is NonNullable<typeof e> => e != null);
 
     // Sort by pointsFor (desc) first, then by tournament points, then by opponents strength
-    rankings.sort((a, b) => {
-      // Primary sort: pointsFor (points scored)
+    teamRankings.sort((a, b) => {
       if (b.pointsFor !== a.pointsFor) {
         return b.pointsFor - a.pointsFor;
       }
-      // Secondary sort: tournament points (wins/draws)
       const aTournamentPoints = a.wins + a.draws * 0.5;
       const bTournamentPoints = b.wins + b.draws * 0.5;
       if (bTournamentPoints !== aTournamentPoints) {
         return bTournamentPoints - aTournamentPoints;
       }
-      // Tertiary sort: opponents strength (Swiss-system tiebreaker)
       return b.opponentsStrength - a.opponentsStrength;
     });
 
-    return rankings;
+    return teamRankings;
   }
 
   async leave(

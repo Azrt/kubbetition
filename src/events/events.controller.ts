@@ -23,7 +23,7 @@ import { RequestWithUser } from 'src/auth/interfaces/requestWithUser.interface';
 import { JoinEventDto } from './dto/join-event.dto';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateEventDto } from './dto/update-event.dto';
-import { RankingEntryDto } from './dto/ranking-response.dto';
+import { TeamRankingEntryDto } from './dto/ranking-response.dto';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { SendInvitationDto } from './dto/send-invitation.dto';
 import { EventInvitation } from './entities/event-invitation.entity';
@@ -122,8 +122,8 @@ export class EventsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Ranking list sorted from first to last place',
-    type: [RankingEntryDto],
+    description: 'Ranking list by team (members + stats), sorted from first to last place',
+    type: [TeamRankingEntryDto],
   })
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
@@ -131,7 +131,7 @@ export class EventsController {
     @Param('id') eventId: string,
     @Query('round') round?: string,
     @Request() req?: RequestWithUser,
-  ): Promise<RankingEntryDto[]> {
+  ): Promise<TeamRankingEntryDto[]> {
     const roundNumber = round ? parseInt(round, 10) : undefined;
     return this.eventsService.getRanking(eventId, roundNumber, req?.user);
   }
@@ -150,6 +150,25 @@ export class EventsController {
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.getActiveGames(eventId, req.user);
+  }
+
+  @Get(':id/status')
+  @ApiOperation({ summary: 'Get event status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Event status: not started | in progress | finished',
+    schema: {
+      type: 'object',
+      properties: { status: { type: 'string', enum: ['not started', 'in progress', 'finished'] } },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getStatus(
+    @Param('id') eventId: string,
+    @Request() req?: RequestWithUser,
+  ): Promise<{ status: 'not started' | 'in progress' | 'finished' }> {
+    return this.eventsService.getStatus(eventId, req?.user);
   }
 
   @Get(':id')

@@ -1,9 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { User } from 'src/users/entities/user.entity';
 
-export class RankingEntryDto {
-  @ApiProperty({ description: 'User information' })
-  user: User;
+export class TeamRankingEntryDto {
+  @ApiProperty({
+    description: 'Team members (array of users in this team)',
+    type: () => User,
+    isArray: true,
+  })
+  members: User[];
 
   @ApiProperty({ description: 'Total points gained (pointsFor - sum of all points scored in games)' })
   points: number;
