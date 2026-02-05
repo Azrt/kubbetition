@@ -9,6 +9,40 @@ const ToBoolean = () => Transform(({ value }) => {
   return value;
 });
 
+// Helper to transform location to PostgreSQL point format
+// Accepts: JSON {x, y}, string "(x, y)", or string "x, y"
+// Returns: PostgreSQL point format "(x, y)"
+const ToPoint = () => Transform(({ value }) => {
+  if (!value) return value;
+  
+  // If already in correct format "(x, y)", return as-is
+  if (typeof value === 'string' && value.startsWith('(') && value.endsWith(')')) {
+    return value;
+  }
+  
+  // If it's a JSON object {x, y}
+  if (typeof value === 'object' && value !== null && ('x' in value || 'X' in value)) {
+    const x = value.x || value.X;
+    const y = value.y || value.Y;
+    if (typeof x === 'number' && typeof y === 'number') {
+      return `(${x}, ${y})`;
+    }
+  }
+  
+  // If it's a string like "x, y" or "x,y"
+  if (typeof value === 'string') {
+    const cleaned = value.trim();
+    // Try to parse as "x, y" or "x,y"
+    const match = cleaned.match(/^([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)$/);
+    if (match) {
+      return `(${match[1]}, ${match[2]})`;
+    }
+  }
+  
+  // If we can't parse it, return as-is (will fail validation)
+  return value;
+});
+
 export class UpdateEventDto {
   @ApiProperty({ description: 'Event name', example: 'Summer Tournament', required: false })
   @IsString()
@@ -36,10 +70,12 @@ export class UpdateEventDto {
   rounds?: number;
 
   @ApiProperty({
-    description: 'Event location (point)',
+    description: 'Event location (point). Accepts: JSON {x, y}, string "(x, y)", or string "x, y"',
     required: false,
+    example: '(16.93, 52.40)',
   })
   @IsOptional()
+  @ToPoint()
   @IsString()
   location?: string;
 

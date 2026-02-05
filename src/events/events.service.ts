@@ -18,6 +18,7 @@ import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { FriendRequestStatus } from 'src/users/enums/friend-request-status.enum';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { ParticipantInfoDto } from './dto/participant-info.dto';
 
 @Injectable()
 export class EventsService {
@@ -61,10 +62,8 @@ export class EventsService {
     // Admins can see all events
     if (isAdminRole(currentUser)) return true;
     
-    // User is the creator
     if (event.createdBy.id === currentUser.id) return true;
     
-    // User has an invitation
     if (await this.hasInvitation(event.id, currentUser.id)) return true;
     
     return false;
@@ -140,7 +139,89 @@ export class EventsService {
     return Promise.all(urlPromises);
   }
 
-  async join(eventId: string, team: string[], currentUser: User): Promise<EventEntity> {
+  /**
+   * Transform event participants to include user details (firstName, lastName, teamName, avatarUrl)
+   * Returns participant info for public events to all users
+   * For private events, only returns to authorized users (creator, admin, or invited)
+   * @param event The event to transform participants for
+   * @param currentUser The current user making the request
+   * @returns Array of participant teams, each team containing participant info
+   */
+  private async transformParticipants(
+    event: EventEntity,
+    currentUser: User,
+  ): Promise<Array<Array<ParticipantInfoDto>> | null> {
+    // Return participant details for public events to all users
+    if (event.isPublic) {
+      // Public events - return participant info to all users
+    } else {
+      // Private events - only return to authorized users (creator, admin, or invited)
+      if (!isAdminRole(currentUser) && event.createdBy.id !== currentUser.id) {
+        const hasInvite = await this.hasInvitation(event.id, currentUser.id);
+        if (!hasInvite) {
+          return null; // Don't return participant info for unauthorized users
+        }
+      }
+    }
+
+    if (!event.participants || event.participants.length === 0) {
+      return [];
+    }
+
+    // Get all unique participant user IDs
+    const allParticipantIds = [...new Set(event.participants.flat())];
+    
+    // Load all participants with their team relations
+    const participants = await this.usersRepository.find({
+      where: { id: In(allParticipantIds) },
+      relations: ['team'],
+    });
+
+    // Create a map for quick lookup
+    const participantsMap = new Map(participants.map(p => [p.id, p]));
+
+    // Transform participants array to include user details
+    return event.participants.map((team) =>
+      team.map((userId) => {
+        const user = participantsMap.get(userId);
+        if (!user) {
+          // User not found - return minimal info
+          return {
+            id: userId,
+            firstName: 'Unknown',
+            lastName: 'User',
+            teamName: null,
+            avatarUrl: null,
+          };
+        }
+
+        // Get avatar URL (public URL for user avatars)
+        let avatarUrl: string | null = null;
+        if (user.image) {
+          try {
+            avatarUrl = this.fileUploadService.getFileUrl(user.image, FileType.USER_AVATAR);
+          } catch (error) {
+            // Log but don't fail
+            console.error(`Failed to get avatar URL for user ${user.id}:`, error);
+          }
+        }
+
+        return {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          teamName: user.team?.name || null,
+          avatarUrl,
+        };
+      }),
+    );
+  }
+
+  async join(
+    eventId: string,
+    team: string[],
+    currentUser: User,
+  ): Promise<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -261,7 +342,10 @@ export class EventsService {
     }
 
     event.participants = [...(event.participants || []), uniqueTeamIds];
-    return this.eventsRepository.save(event);
+    const savedEvent = await this.eventsRepository.save(event);
+    const eventWithImage = await this.addImageUrl(savedEvent);
+    const participantsInfo = await this.transformParticipants(savedEvent, currentUser);
+    return { ...eventWithImage, participantsInfo };
   }
 
   async update(eventId: string, updateEventDto: UpdateEventDto, currentUser: User): Promise<EventEntity> {
@@ -922,21 +1006,29 @@ export class EventsService {
     return event;
   }
 
-  async findOneVisible(id: string, currentUser: User): Promise<EventEntity & { imageUrl: string | null }> {
+  async findOneVisible(
+    id: string,
+    currentUser: User,
+  ): Promise<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }> {
     const event = await this.findOne(id);
-    
+
     if (!(await this.canViewEvent(event, currentUser))) {
       throw new ForbiddenException('You are not allowed to access this event');
     }
-    
+
     // Add presigned URL for event image
-    return this.addImageUrl(event);
+    const eventWithImage = await this.addImageUrl(event);
+
+    // Add participant details (only for public events to all users, or authorized users for private events)
+    const participantsInfo = await this.transformParticipants(event, currentUser);
+
+    return { ...eventWithImage, participantsInfo };
   }
 
   async findAllVisible(
-    currentUser: User, 
+    currentUser: User,
     showArchived: boolean = false,
-  ): Promise<Array<EventEntity & { imageUrl: string | null }>> {
+  ): Promise<Array<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }>> {
     let events: EventEntity[];
     
     // Get start of today (midnight) for date filtering
@@ -987,7 +1079,17 @@ export class EventsService {
     }
 
     // Add presigned URLs for all events in parallel
-    return this.addImageUrls(events);
+    const eventsWithImages = await this.addImageUrls(events);
+
+    // Add participant details for all events in parallel
+    const eventsWithParticipants = await Promise.all(
+      eventsWithImages.map(async (event) => {
+        const participantsInfo = await this.transformParticipants(event, currentUser);
+        return { ...event, participantsInfo };
+      }),
+    );
+
+    return eventsWithParticipants;
   }
 
   async endRound(eventId: string, currentUser: User): Promise<Game[]> {
@@ -1281,7 +1383,10 @@ export class EventsService {
     return rankings;
   }
 
-  async leave(eventId: string, currentUser: User): Promise<EventEntity> {
+  async leave(
+    eventId: string,
+    currentUser: User,
+  ): Promise<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -1296,7 +1401,10 @@ export class EventsService {
     }
 
     event.participants = event.participants?.filter((team) => !team.includes(currentUser.id));
-    return this.eventsRepository.save(event);
+    const savedEvent = await this.eventsRepository.save(event);
+    const eventWithImage = await this.addImageUrl(savedEvent);
+    const participantsInfo = await this.transformParticipants(savedEvent, currentUser);
+    return { ...eventWithImage, participantsInfo };
   }
 
   async sendInvitation(eventId: string, userId: string, currentUser: User): Promise<EventInvitation> {

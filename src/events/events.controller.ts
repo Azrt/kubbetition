@@ -75,7 +75,7 @@ export class EventsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all events (includes presigned imageUrl for each event). By default returns only future events and events from today.' })
+  @ApiOperation({ summary: 'Get all events (includes presigned imageUrl and participant info for each event). By default returns only future events and events from today. Participant info (firstName, lastName, teamName, avatarUrl) is returned for public events to all users.' })
   @ApiQuery({
     name: 'showArchived',
     required: false,
@@ -84,13 +84,13 @@ export class EventsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'List of events with presigned image URLs',
+    description: 'List of events with presigned image URLs and participant information',
     type: [Event],
   })
   async findAll(
     @Query('showArchived') showArchived?: string,
     @Request() req?: RequestWithUser,
-  ): Promise<Array<Event & { imageUrl: string | null }>> {
+  ): Promise<Array<Event & { imageUrl: string | null; participantsInfo: Array<Array<any>> | null }>> {
     // Convert string to boolean (query params come as strings)
     const includeArchived = showArchived === 'true';
     return this.eventsService.findAllVisible(req.user, includeArchived);
@@ -153,17 +153,17 @@ export class EventsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get event by ID (includes presigned imageUrl)' })
+  @ApiOperation({ summary: 'Get event by ID (includes presigned imageUrl and participant info)' })
   @ApiResponse({
     status: 200,
-    description: 'Event details with presigned image URL',
+    description: 'Event details with presigned image URL and participant information',
     type: Event,
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(
     @Param('id') id: string,
     @Request() req: RequestWithUser,
-  ): Promise<Event & { imageUrl: string | null }> {
+  ): Promise<Event & { imageUrl: string | null; participantsInfo: Array<Array<any>> | null }> {
     return this.eventsService.findOneVisible(id, req.user);
   }
 

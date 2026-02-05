@@ -20,6 +20,53 @@ const ToBoolean = () => Transform(({ value }) => {
   return value;
 });
 
+// Helper to transform location to PostgreSQL point format
+// Accepts: JSON {x, y}, JSON string '{"x":...,"y":...}', string "(x, y)", or string "x, y"
+// Returns: PostgreSQL point format "(x, y)"
+const ToPoint = () => Transform(({ value }) => {
+  if (!value) return value;
+  
+  // If already in correct format "(x, y)", return as-is
+  if (typeof value === 'string' && value.startsWith('(') && value.endsWith(')')) {
+    return value;
+  }
+  
+  // If it's a JSON string, try to parse it
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && ('x' in parsed || 'X' in parsed)) {
+        const x = parsed.x || parsed.X;
+        const y = parsed.y || parsed.Y;
+        if (typeof x === 'number' && typeof y === 'number') {
+          return `(${x}, ${y})`;
+        }
+      }
+    } catch (e) {
+      // Not JSON, continue to other parsing
+    }
+    
+    // Try to parse as "x, y" or "x,y"
+    const cleaned = value.trim();
+    const match = cleaned.match(/^([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)$/);
+    if (match) {
+      return `(${match[1]}, ${match[2]})`;
+    }
+  }
+  
+  // If it's a JSON object {x, y}
+  if (typeof value === 'object' && value !== null && ('x' in value || 'X' in value)) {
+    const x = value.x || value.X;
+    const y = value.y || value.Y;
+    if (typeof x === 'number' && typeof y === 'number') {
+      return `(${x}, ${y})`;
+    }
+  }
+  
+  // If we can't parse it, return as-is (will fail validation)
+  return value;
+});
+
 export class CreateEventDto {
   @ApiProperty({ description: 'Event name', example: 'Summer Tournament' })
   @IsString()
@@ -72,10 +119,12 @@ export class CreateEventDto {
   rounds: number;
 
   @ApiProperty({
-    description: 'Event location (point)',
+    description: 'Event location (point). Accepts: JSON {x, y}, string "(x, y)", or string "x, y"',
     required: false,
+    example: '(16.93, 52.40)',
   })
   @IsOptional()
+  @ToPoint()
   @IsString()
   location?: string;
 

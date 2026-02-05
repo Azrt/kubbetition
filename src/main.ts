@@ -2,7 +2,11 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from './app.constants';
-import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import {
+  ClassSerializerInterceptor,
+  RequestMethod,
+  ValidationPipe,
+} from '@nestjs/common';
 import { useContainer } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { seedDatabase } from './database/seed';
@@ -36,7 +40,19 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(
     new ClassSerializerInterceptor(app.get(Reflector))
-  )
+  );
+
+  app.setGlobalPrefix('api/v1', {
+    exclude: [
+      { path: 'swagger', method: RequestMethod.ALL },
+      { path: 'swagger-json', method: RequestMethod.ALL },
+      { path: 'auth/google', method: RequestMethod.GET },
+      { path: 'auth/google/redirect', method: RequestMethod.GET },
+      { path: 'auth/google/login', method: RequestMethod.POST },
+      { path: 'auth/refresh', method: RequestMethod.POST },
+      { path: 'auth/me', method: RequestMethod.GET },
+    ],
+  });
 
   const config = new DocumentBuilder()
     .setTitle("Kubbetition")
