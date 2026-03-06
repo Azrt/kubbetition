@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
@@ -39,6 +40,7 @@ import { EventsModule } from './events/events.module';
       isGlobal: true,
       validationSchema: configValidationSchema,
     }),
+    ScheduleModule.forRoot(),
     EventEmitterModule.forRoot({
       verboseMemoryLeak: process.env.NODE_ENV !== "production",
     }),

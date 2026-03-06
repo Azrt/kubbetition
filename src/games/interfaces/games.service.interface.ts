@@ -16,4 +16,5 @@ export interface GamesServiceInterface {
   leaveTeam(gameId: string, user: User): Promise<Game>;
   setTeamReady(gameId: string, team: 1 | 2, user: User): Promise<Game>;
   updateTeamScore(gameId: string, team: 1 | 2, score: number, user: User): Promise<Game>;
+  closeStaleUnfinishedGames(): Promise<number>;
 }

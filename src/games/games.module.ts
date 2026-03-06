@@ -20,6 +20,7 @@ import { RedisService } from 'src/common/services/redis.service';
 import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { FileUploadModule } from 'src/common/modules/file-upload.module';
+import { GamesSchedulerService } from './games-scheduler.service';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { FileUploadModule } from 'src/common/modules/file-upload.module';
   controllers: [GamesController],
   providers: [
     GamesService,
+    GamesSchedulerService,
     UsersService,
     TeamsService,
     UsersExistRule,

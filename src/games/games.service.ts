@@ -3,7 +3,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, LessThan, Repository } from 'typeorm';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
@@ -92,6 +92,37 @@ export class GamesService implements GamesServiceInterface {
     }
 
     return game;
+  }
+
+  /**
+   * Finds all non-ended games that started more than an hour ago,
+   * sets score 0 for teams that did not submit, and ends the games.
+   * Used by the hourly cron to auto-close stale games.
+   */
+  async closeStaleUnfinishedGames(): Promise<number> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const staleGames = await this.gamesRepository.find({
+      relations: GAME_RELATIONS,
+      where: {
+        endTime: IsNull(),
+        isCancelled: false,
+        startTime: LessThan(oneHourAgo),
+      },
+    });
+
+    for (const game of staleGames) {
+      const team1Score = game.team1Score ?? 0;
+      const team2Score = game.team2Score ?? 0;
+      await this.gamesRepository.update(game.id, {
+        team1Score,
+        team2Score,
+        endTime: new Date(),
+      });
+      await this.invalidateHistoryCacheForGame(game);
+    }
+
+    return staleGames.length;
   }
 
   async startGame(id: string) {
