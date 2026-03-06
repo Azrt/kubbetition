@@ -1,4 +1,5 @@
 import { Common } from 'src/common/entities/CommonEntity';
+import { Post } from './post.entity';
 import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
@@ -37,6 +38,12 @@ export class Team extends Common {
     cascade: true,
   })
   teamRequests: Array<TeamRequest>;
+
+  @OneToMany(() => Post, (post) => post.team, {
+    nullable: true,
+    cascade: true,
+  })
+  posts: Array<Post>;
 
   @ManyToOne(() => User, {
     nullable: false,
