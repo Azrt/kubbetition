@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsArray, IsDefined, IsEnum, IsInt, IsOptional, IsUUID, Max, Min, Validate } from "class-validator";
+import { IsArray, IsBoolean, IsDefined, IsEnum, IsInt, IsOptional, IsUUID, Max, Min, Validate } from "class-validator";
 import { GameType } from "src/common/enums/gameType";
 import { UsersExistRule } from "../validation/users-exist.rule";
 import { ParticipantsAreFriendsOrTeamMembersRule } from "../validation/participants-are-friends-or-team-members.rule";
@@ -20,6 +20,11 @@ export class CreateGameDto extends ContextAwareDto {
   @Validate(UsersExistRule)
   @Validate(ParticipantsAreFriendsOrTeamMembersRule)
   participants?: Array<string>;
+
+  @ApiProperty({ description: 'When true, randomly assign participants to team1 and team2 (default: false)', required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  randomize?: boolean;
 
   @ApiProperty({ description: 'Game duration in minutes (5-60)' })
   @IsDefined()

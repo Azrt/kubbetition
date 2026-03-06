@@ -32,7 +32,7 @@ export class GamesService implements GamesServiceInterface {
   ) {}
 
   async create(createGameDto: CreateGameDto, currentUser: User) {
-    const { participants, ...data } = createGameDto;
+    const { participants, randomize = false, ...data } = createGameDto;
 
     const game = this.gamesRepository.create({
       ...data,
@@ -52,10 +52,26 @@ export class GamesService implements GamesServiceInterface {
     if (participants && participants.length > 0) {
       const participantUsers = await this.usersRepository.findBy({ id: In(participants) });
       savedGame.participants = participantUsers;
+
+      if (randomize && participantUsers.length >= 2) {
+        const shuffled = this.shuffleArray([...participantUsers]);
+        const half = Math.floor(shuffled.length / 2);
+        savedGame.team1Members = shuffled.slice(0, half);
+        savedGame.team2Members = shuffled.slice(half);
+      }
+
       await this.gamesRepository.save(savedGame);
     }
 
     return this.findOne(savedGame.id);
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
   }
 
   async updateSocialPhoto(id: string, photoUrl: string) {
