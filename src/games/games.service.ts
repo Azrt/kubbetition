@@ -3,7 +3,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { In, IsNull, LessThan, Repository } from 'typeorm';
+import { Brackets, In, IsNull, LessThan, Repository } from 'typeorm';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
@@ -318,6 +318,95 @@ export class GamesService implements GamesServiceInterface {
     await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
 
     return result;
+  }
+
+  /**
+   * Returns history of games played by the current user against a specific group of opponents
+   * (e.g. 3v3: the three people on the other team), with aggregate stats (wins, losses, draws, win rate).
+   * Opponent group is matched by exact set: the other team must consist exactly of the given user IDs.
+   */
+  async findSummaryAgainstOpponents(
+    currentUser: User,
+    opponentIds: string[],
+    options?: { gameType?: number; limit?: number },
+  ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }> {
+    const len = opponentIds.length;
+    const limit = Math.min(options?.limit ?? 50, 100);
+    const params = {
+      userId: currentUser.id,
+      opponentIds,
+      len,
+      isCancelled: false,
+      gameType: options?.gameType,
+    };
+
+    const qb = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.event', 'event')
+      .where('game.endTime IS NOT NULL')
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: params.isCancelled })
+      .andWhere(
+        new Brackets((qb2) => {
+          qb2
+            .where('team1Members.id = :userId')
+            .andWhere(
+              `EXISTS (
+                SELECT 1 FROM game_team2_members g2
+                WHERE g2.game_id = game.id
+                GROUP BY g2.game_id
+                HAVING COUNT(*) = :len AND COUNT(CASE WHEN g2.member_id IN (:...opponentIds) THEN 1 END) = :len
+              )`,
+            )
+            .orWhere(
+              new Brackets((qb3) => {
+                qb3
+                  .where('team2Members.id = :userId')
+                  .andWhere(
+                    `EXISTS (
+                      SELECT 1 FROM game_team1_members g1
+                      WHERE g1.game_id = game.id
+                      GROUP BY g1.game_id
+                      HAVING COUNT(*) = :len AND COUNT(CASE WHEN g1.member_id IN (:...opponentIds) THEN 1 END) = :len
+                    )`,
+                  );
+              }),
+            );
+        }),
+      )
+      .orderBy('game.endTime', 'DESC')
+      .take(limit);
+
+    if (params.gameType != null) {
+      qb.andWhere('game.type = :gameType', { gameType: params.gameType });
+    }
+
+    qb.setParameters({ userId: params.userId, opponentIds: params.opponentIds, len: params.len });
+
+    const games = await qb.getMany();
+
+    games.forEach((g) => this.computeGameProperties(g));
+
+    let wins = 0;
+    let losses = 0;
+    let draws = 0;
+    for (const g of games) {
+      const myTeam = g.team1Members?.some((m) => m.id === currentUser.id) ? 1 : 2;
+      if (g.winner === null) draws++;
+      else if (g.winner === myTeam) wins++;
+      else losses++;
+    }
+    const totalGames = games.length;
+    const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+
+    return {
+      summary: { totalGames, wins, losses, draws, winRate },
+      games,
+    };
   }
 
   // Team operations

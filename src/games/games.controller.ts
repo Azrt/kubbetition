@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GamesService } from './games.service';
 import { CreateGameDto } from './dto/create-game.dto';
@@ -22,6 +22,9 @@ import { TeamReadyParamsDto } from './dto/team-ready.dto';
 import { UpdateTeamScoreParamsDto, UpdateTeamScoreBodyDto } from './dto/update-team-score.dto';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { isAdminRole } from 'src/common/helpers/user';
+import { SummaryQueryDto } from './dto/summary-query.dto';
+import { GamesSummaryResponseDto } from './dto/summary-response.dto';
+import { ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -87,6 +90,19 @@ export class GamesController {
     @Paginate() query: PaginateQuery
   ): Promise<Paginated<Game>> {
     return this.gamesService.findUserHistory(userId, query);
+  }
+
+  @Get("summary")
+  @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
+  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 6], description: 'Filter by game type (1=1v1, 3=3v3, etc.)' })
+  async getSummary(
+    @Query() query: SummaryQueryDto,
+    @CurrentUser() currentUser: User,
+  ): Promise<GamesSummaryResponseDto> {
+    return this.gamesService.findSummaryAgainstOpponents(currentUser, query.opponentIds, {
+      gameType: query.gameType,
+      limit: 50,
+    });
   }
 
   @Get(":gameId")
