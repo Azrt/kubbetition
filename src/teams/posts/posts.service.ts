@@ -17,6 +17,7 @@ import { PostType } from './enums/post-type.enum';
 import { ReactionType } from './enums/reaction-type.enum';
 import { Role } from 'src/common/enums/role.enum';
 import { isAdminRole } from 'src/common/helpers/user';
+import { TeamPostsGateway } from 'src/teams/team-posts.gateway';
 
 const CAN_PIN_ROLES = [Role.ADMIN, Role.SUPERADMIN, Role.SUPERVISOR];
 
@@ -36,6 +37,7 @@ export class PostsService {
     private postReactionsRepository: Repository<PostReaction>,
     @InjectRepository(Team)
     private teamsRepository: Repository<Team>,
+    private readonly teamPostsGateway: TeamPostsGateway,
   ) {}
 
   private emptyReactionCounts(): Record<ReactionType, number> {
@@ -159,7 +161,15 @@ export class PostsService {
       dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
       team,
     });
-    return this.postsRepository.save(post);
+    const saved = await this.postsRepository.save(post);
+    const countsMap = await this.getReactionCountsForPostIds([saved.id]);
+    const payload = this.enrichPostWithReactions(
+      saved,
+      countsMap.get(saved.id) ?? this.emptyReactionCounts(),
+      null,
+    );
+    this.teamPostsGateway.sendPostToTeamMembers(teamId, { post: payload as unknown as Record<string, unknown> }).catch(() => {});
+    return saved;
   }
 
   async update(teamId: string, id: string, dto: UpdatePostDto, user: User): Promise<Post> {
@@ -183,7 +193,15 @@ export class PostsService {
     if (dto.pinned !== undefined) post.pinned = dto.pinned;
     if (dto.dueDate !== undefined) post.dueDate = dto.dueDate == null ? null : new Date(dto.dueDate);
 
-    return this.postsRepository.save(post);
+    const saved = await this.postsRepository.save(post);
+    const countsMap = await this.getReactionCountsForPostIds([saved.id]);
+    const payload = this.enrichPostWithReactions(
+      saved,
+      countsMap.get(saved.id) ?? this.emptyReactionCounts(),
+      null,
+    );
+    this.teamPostsGateway.sendPostToTeamMembers(teamId, { post: payload as unknown as Record<string, unknown> }).catch(() => {});
+    return saved;
   }
 
   async remove(teamId: string, id: string, user: User): Promise<void> {
@@ -197,7 +215,9 @@ export class PostsService {
       throw new ForbiddenException('You can only delete posts of your team');
     }
 
+    const postId = post.id;
     await this.postsRepository.remove(post);
+    this.teamPostsGateway.sendPostToTeamMembers(teamId, { post: { id: postId, teamId, deleted: true } }).catch(() => {});
   }
 
   async setReaction(teamId: string, postId: string, type: ReactionType, user: User): Promise<PostWithReactions> {
@@ -227,7 +247,10 @@ export class PostsService {
       await this.postReactionsRepository.save(reaction);
     }
 
-    return this.findOne(teamId, postId, user);
+    const updated = await this.findOne(teamId, postId, user);
+    const broadcastPayload = { ...updated, myReaction: null as ReactionType | null };
+    this.teamPostsGateway.sendPostToTeamMembers(teamId, { post: broadcastPayload as unknown as Record<string, unknown> }).catch(() => {});
+    return updated;
   }
 
   async removeReaction(teamId: string, postId: string, user: User): Promise<void> {
@@ -244,5 +267,19 @@ export class PostsService {
       post: { id: postId },
       user: { id: user.id },
     });
+
+    const countsMap = await this.getReactionCountsForPostIds([postId]);
+    const postForEmit = await this.postsRepository.findOne({
+      where: { id: postId, team: { id: teamId } },
+      relations: ['team'],
+    });
+    if (postForEmit) {
+      const payload = this.enrichPostWithReactions(
+        postForEmit,
+        countsMap.get(postId) ?? this.emptyReactionCounts(),
+        null,
+      );
+      this.teamPostsGateway.sendPostToTeamMembers(teamId, { post: payload as unknown as Record<string, unknown> }).catch(() => {});
+    }
   }
 }

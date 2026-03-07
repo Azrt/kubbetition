@@ -33,6 +33,7 @@ import { FileUploadModule } from 'src/common/modules/file-upload.module';
     FriendRequestExistsRule,
     GeolocationService,
   ],
+  exports: [UsersService],
 })
 export class UsersModule {
   configure(consumer: MiddlewareConsumer) {
