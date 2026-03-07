@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { PostsService } from './posts.service';
 import { Post as PostEntity } from 'src/teams/entities/post.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { SetReactionDto } from './dto/set-reaction.dto';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
 import { POSTS_PAGINATION_CONFIG } from './posts.constants';
@@ -77,5 +79,26 @@ export class PostsController {
     @CurrentUser() user: User,
   ) {
     return this.postsService.remove(teamId, id, user);
+  }
+
+  @Put(':postId/reactions')
+  @UseInterceptors(NotFoundInterceptor)
+  setReaction(
+    @Param('teamId') teamId: string,
+    @Param('postId') postId: string,
+    @Body() setReactionDto: SetReactionDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.postsService.setReaction(teamId, postId, setReactionDto.type, user);
+  }
+
+  @Delete(':postId/reactions')
+  @UseInterceptors(NotFoundInterceptor)
+  removeReaction(
+    @Param('teamId') teamId: string,
+    @Param('postId') postId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.postsService.removeReaction(teamId, postId, user);
   }
 }

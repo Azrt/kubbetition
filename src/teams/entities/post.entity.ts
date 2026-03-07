@@ -1,7 +1,8 @@
 import { Common } from 'src/common/entities/CommonEntity';
 import { Team } from 'src/teams/entities/team.entity';
-import { Column, Entity, ManyToOne } from 'typeorm';
+import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
 import { PostType } from '../posts/enums/post-type.enum';
+import { PostReaction } from './post-reaction.entity';
 
 @Entity()
 export class Post extends Common {
@@ -26,4 +27,7 @@ export class Post extends Common {
 
   @ManyToOne(() => Team, (team) => team.posts, { nullable: false, onDelete: 'CASCADE' })
   team: Team;
+
+  @OneToMany(() => PostReaction, (reaction) => reaction.post, { cascade: true })
+  reactions: PostReaction[];
 }
