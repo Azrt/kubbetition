@@ -25,6 +25,7 @@ import { isAdminRole } from 'src/common/helpers/user';
 import { SummaryQueryDto } from './dto/summary-query.dto';
 import { GamesSummaryResponseDto } from './dto/summary-response.dto';
 import { ApiQuery } from '@nestjs/swagger';
+import { DivisionStatsDto } from 'src/teams/divisions/dto/division-stats.dto';
 
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -92,9 +93,30 @@ export class GamesController {
     return this.gamesService.findUserHistory(userId, query);
   }
 
+  @Get("division/:divisionId/stats")
+  @ApiQuery({ name: 'teamId', required: true, description: 'Team that owns the division' })
+  getDivisionStats(
+    @Param("divisionId") divisionId: string,
+    @Query("teamId") teamId: string,
+    @CurrentUser() currentUser: User,
+  ): Promise<DivisionStatsDto> {
+    return this.gamesService.getDivisionStats(divisionId, teamId, currentUser);
+  }
+
+  @Get("division/:divisionId")
+  @ApiQuery({ name: 'teamId', required: true, description: 'Team that owns the division' })
+  findDivisionHistory(
+    @Param("divisionId") divisionId: string,
+    @Query("teamId") teamId: string,
+    @CurrentUser() currentUser: User,
+    @Paginate() query: PaginateQuery,
+  ): Promise<Paginated<Game>> {
+    return this.gamesService.findDivisionHistory(divisionId, teamId, currentUser, query);
+  }
+
   @Get("summary")
   @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
-  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 6], description: 'Filter by game type (1=1v1, 3=3v3, etc.)' })
+  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 4, 6], description: 'Filter by game type (1=1v1, 2=2v2, 3=3v3, 4=4v4, 6=6v6)' })
   async getSummary(
     @Query() query: SummaryQueryDto,
     @CurrentUser() currentUser: User,

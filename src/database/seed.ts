@@ -153,7 +153,7 @@ export async function seedDatabase(dataSource: DataSource): Promise<void> {
 
     // Create 100 games
     console.log('Creating 100 games...');
-    const gameTypes = [GameType.OneVsOne, GameType.TwoVsTwo, GameType.ThreeVsThree, GameType.SixVsSix];
+    const gameTypes = [GameType.OneVsOne, GameType.TwoVsTwo, GameType.ThreeVsThree, GameType.FourVsFour, GameType.SixVsSix];
     const games: Game[] = [];
 
     for (let i = 0; i < 100; i++) {
@@ -182,6 +182,11 @@ export async function seedDatabase(dataSource: DataSource): Promise<void> {
         const shuffled = [...availableUsers].sort(() => Math.random() - 0.5);
         team1Members = shuffled.slice(0, 3);
         team2Members = shuffled.slice(3, 6);
+      } else if (gameType === GameType.FourVsFour) {
+        // 4v4 - pick 8 random users, split into 2 teams
+        const shuffled = [...availableUsers].sort(() => Math.random() - 0.5);
+        team1Members = shuffled.slice(0, 4);
+        team2Members = shuffled.slice(4, 8);
       } else if (gameType === GameType.SixVsSix) {
         // 6v6 - pick 12 random users, split into 2 teams
         const shuffled = [...availableUsers].sort(() => Math.random() - 0.5);

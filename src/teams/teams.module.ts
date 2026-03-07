@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TeamsService } from './teams.service';
 import { TeamsController } from './teams.controller';
 import { Team } from './entities/team.entity';
+import { Division } from './entities/division.entity';
 import { Post } from './entities/post.entity';
 import { PostReaction } from './entities/post-reaction.entity';
 import { User } from 'src/users/entities/user.entity';
@@ -16,10 +17,12 @@ import { PostsController } from './posts/posts.controller';
 import { PostsService } from './posts/posts.service';
 import { TeamPostsGateway } from './team-posts.gateway';
 import { UsersModule } from 'src/users/users.module';
+import { DivisionsController } from './divisions/divisions.controller';
+import { DivisionsService } from './divisions/divisions.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Team, Post, PostReaction, User]),
+    TypeOrmModule.forFeature([Team, Division, Post, PostReaction, User]),
     FileUploadModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -33,7 +36,8 @@ import { UsersModule } from 'src/users/users.module';
     }),
     UsersModule,
   ],
-  controllers: [TeamsController, PostsController],
-  providers: [TeamsService, PostsService, CountriesService, CountryExistsRule, SameTeamGuard, TeamPostsGateway],
+  controllers: [TeamsController, PostsController, DivisionsController],
+  providers: [TeamsService, PostsService, DivisionsService, CountriesService, CountryExistsRule, SameTeamGuard, TeamPostsGateway],
+  exports: [DivisionsService],
 })
 export class TeamsModule {}

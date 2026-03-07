@@ -19,6 +19,19 @@ import { FriendRequestStatus } from 'src/users/enums/friend-request-status.enum'
 import { EventInvitation } from './entities/event-invitation.entity';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { ParticipantInfoDto } from './dto/participant-info.dto';
+import { DivisionsService } from 'src/teams/divisions/divisions.service';
+
+/** Event participant entry: legacy string[] or object with userIds and optional division info (for round games) */
+export type EventParticipantEntry = string[] | { userIds: string[]; divisionId?: string | null; teamId?: string | null };
+
+function getParticipantUserIds(entry: EventParticipantEntry): string[] {
+  return Array.isArray(entry) ? entry : entry.userIds;
+}
+
+function getParticipantDivisionId(entry: EventParticipantEntry): string | null {
+  if (Array.isArray(entry)) return null;
+  return entry.divisionId ?? null;
+}
 
 @Injectable()
 export class EventsService {
@@ -34,11 +47,12 @@ export class EventsService {
     @InjectRepository(EventInvitation)
     private eventInvitationsRepository: Repository<EventInvitation>,
     private fileUploadService: FileUploadService,
+    private divisionsService: DivisionsService,
   ) {}
 
   private isParticipant(event: EventEntity, userId: string): boolean {
     const teams = event.participants || [];
-    return teams.some((team) => Array.isArray(team) && team.includes(userId));
+    return teams.some((team) => getParticipantUserIds(team).includes(userId));
   }
 
   private async hasInvitation(eventId: string, userId: string): Promise<boolean> {
@@ -168,8 +182,8 @@ export class EventsService {
       return [];
     }
 
-    // Get all unique participant user IDs
-    const allParticipantIds = [...new Set(event.participants.flat())];
+    // Get all unique participant user IDs (support both string[] and { userIds } entries)
+    const allParticipantIds = [...new Set(event.participants.flatMap(getParticipantUserIds))];
     
     // Load all participants with their team relations
     const participants = await this.usersRepository.find({
@@ -181,8 +195,8 @@ export class EventsService {
     const participantsMap = new Map(participants.map(p => [p.id, p]));
 
     // Transform participants array to include user details
-    return event.participants.map((team) =>
-      team.map((userId) => {
+    return event.participants.map((entry) =>
+      getParticipantUserIds(entry).map((userId) => {
         const user = participantsMap.get(userId);
         if (!user) {
           // User not found - return minimal info
@@ -219,9 +233,18 @@ export class EventsService {
 
   async join(
     eventId: string,
-    team: string[],
+    body: { team?: string[]; divisionId?: string },
     currentUser: User,
   ): Promise<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }> {
+    const { team: teamIds, divisionId } = body;
+    const hasTeam = teamIds && teamIds.length > 0;
+    if (hasTeam && divisionId) {
+      throw new BadRequestException('Provide either team or divisionId, not both');
+    }
+    if (!hasTeam && !divisionId) {
+      throw new BadRequestException('Provide either team (array of user IDs) or divisionId');
+    }
+
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games'],
@@ -242,6 +265,26 @@ export class EventsService {
       throw new BadRequestException('Cannot join: joining time has passed');
     }
 
+    // Load current user with team and members relation (needed for divisionId and friend/team checks)
+    const userWithTeam = await this.usersRepository.findOne({
+      where: { id: currentUser.id },
+      relations: ['team', 'team.members'],
+    });
+
+    let team: string[];
+    if (divisionId) {
+      if (!userWithTeam?.team?.id) {
+        throw new BadRequestException('You must belong to a team to join an event with a division');
+      }
+      team = await this.divisionsService.getDivisionMemberIdsForGameType(
+        divisionId,
+        userWithTeam.team.id,
+        event.gameType,
+      );
+    } else {
+      team = teamIds!;
+    }
+
     if (team.length === 0) {
       throw new BadRequestException('Team cannot be empty');
     }
@@ -253,12 +296,6 @@ export class EventsService {
         throw new ForbiddenException('You need an invitation to join this private event');
       }
     }
-
-    // Load current user with team and members relation
-    const userWithTeam = await this.usersRepository.findOne({
-      where: { id: currentUser.id },
-      relations: ['team', 'team.members'],
-    });
 
     // Get all accepted friend requests where user is either requester or recipient
     const friendRequests = await this.friendRequestsRepository.find({
@@ -308,7 +345,7 @@ export class EventsService {
       );
     }
 
-    if (event.participants?.some((participant) => participant.some((member) => team.includes(member)))) {
+    if (event.participants?.some((participant) => getParticipantUserIds(participant).some((member) => team.includes(member)))) {
       throw new BadRequestException('Team members already participating in this event');
     }
 
@@ -333,7 +370,7 @@ export class EventsService {
     }
 
     // Prevent users already in event from joining again
-    const existingIds = new Set((event.participants || []).flat());
+    const existingIds = new Set((event.participants || []).flatMap(getParticipantUserIds));
     const duplicates = uniqueTeamIds.filter((id) => existingIds.has(id));
     if (duplicates.length) {
       throw new BadRequestException(
@@ -341,7 +378,11 @@ export class EventsService {
       );
     }
 
-    event.participants = [...(event.participants || []), uniqueTeamIds];
+    // Store with division info when joining via division (for setting game.team1Division/team2Division when starting round)
+    const newEntry = divisionId
+      ? { userIds: uniqueTeamIds, divisionId, teamId: userWithTeam!.team!.id }
+      : uniqueTeamIds;
+    event.participants = [...(event.participants || []), newEntry];
     const savedEvent = await this.eventsRepository.save(event);
     const eventWithImage = await this.addImageUrl(savedEvent);
     const participantsInfo = await this.transformParticipants(savedEvent, currentUser);
@@ -613,19 +654,20 @@ export class EventsService {
     }
 
     // Validate participants exist and match game type before starting round
-    const participants = event.participants || [];
-    if (participants.length < 2) {
+    const participantEntries = event.participants || [];
+    const participantsAsArrays = participantEntries.map(getParticipantUserIds);
+    if (participantEntries.length < 2) {
       throw new BadRequestException('At least 2 teams are required for an event');
     }
     const teamSize = event.gameType;
-    for (const team of participants) {
+    for (const team of participantsAsArrays) {
       if (!Array.isArray(team) || team.length !== teamSize) {
         throw new BadRequestException(
           `Each team must have exactly ${teamSize} participants for ${teamSize}v${teamSize} game type`,
         );
       }
     }
-    const allIds = participants.flat();
+    const allIds = participantsAsArrays.flat();
     const uniqueIds = [...new Set(allIds)];
     const existingUsers = await this.usersRepository.findBy({ id: In(uniqueIds) });
     if (existingUsers.length !== uniqueIds.length) {
@@ -646,18 +688,26 @@ export class EventsService {
     // Generate matchups - use tournament mode if enabled and not round 1
     const matchups = event.tournamentMode && roundNumber > 1
       ? this.generateTournamentMatchups(
-          participants,
+          participantsAsArrays,
           previousGames,
           event.gameType,
         )
       : this.generateMatchups(
-          participants,
+          participantsAsArrays,
           previousGames,
           event.gameType,
         );
 
+    // Helper: find participant index whose userIds (sorted) match the given team ids
+    const findParticipantIndex = (teamIds: string[]): number =>
+      participantsAsArrays.findIndex(
+        (userIds) =>
+          userIds.length === teamIds.length &&
+          [...userIds].sort().join(',') === [...teamIds].sort().join(','),
+      );
+
     // Load all users
-    const allParticipantIds = participants.flat();
+    const allParticipantIds = participantsAsArrays.flat();
     const users = await this.usersRepository.findBy({
       id: In(allParticipantIds),
     });
@@ -677,9 +727,16 @@ export class EventsService {
         throw new BadRequestException('Some participants not found');
       }
 
+      const idx1 = findParticipantIndex(team1Ids);
+      const idx2 = findParticipantIndex(team2Ids);
+      const division1Id = idx1 >= 0 ? getParticipantDivisionId(participantEntries[idx1]) : null;
+      const division2Id = idx2 >= 0 ? getParticipantDivisionId(participantEntries[idx2]) : null;
+
       const game = this.gamesRepository.create({
         type: event.gameType,
         duration: gameDuration,
+        team1Division: division1Id ? { id: division1Id } as any : null,
+        team2Division: division2Id ? { id: division2Id } as any : null,
         team1Members,
         team2Members,
         participants: [...team1Members, ...team2Members],
@@ -690,6 +747,7 @@ export class EventsService {
         team2Score: null,
         team1Ready: false,
         team2Ready: false,
+        winner: null,
         isCancelled: false,
         startTime: null,
         endTime: null,
@@ -1275,10 +1333,10 @@ export class EventsService {
       return true;
     });
 
-    // Get all participant user IDs from event
+    // Get all participant user IDs from event (support both string[] and { userIds } entries)
     const allParticipantIds = new Set<string>();
-    (event.participants || []).forEach((team) => {
-      team.forEach((userId) => allParticipantIds.add(userId));
+    (event.participants || []).forEach((entry) => {
+      getParticipantUserIds(entry).forEach((userId) => allParticipantIds.add(userId));
     });
 
     // Load all participants
@@ -1381,7 +1439,8 @@ export class EventsService {
 
     // Build team-based ranking entries (one entry per event team)
     const teamRankings = (event.participants || [])
-      .map((teamIds) => {
+      .map((entry) => {
+        const teamIds = getParticipantUserIds(entry);
         const firstMemberStats = teamIds.length > 0 ? userStats.get(teamIds[0]) : null;
         if (!firstMemberStats) return null;
 
@@ -1438,7 +1497,9 @@ export class EventsService {
       throw new ForbiddenException('You are not a participant of this event');
     }
 
-    event.participants = event.participants?.filter((team) => !team.includes(currentUser.id));
+    event.participants = event.participants?.filter(
+      (entry) => !getParticipantUserIds(entry).includes(currentUser.id),
+    );
     const savedEvent = await this.eventsRepository.save(event);
     const eventWithImage = await this.addImageUrl(savedEvent);
     const participantsInfo = await this.transformParticipants(savedEvent, currentUser);

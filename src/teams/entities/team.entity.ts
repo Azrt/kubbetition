@@ -1,4 +1,5 @@
 import { Common } from 'src/common/entities/CommonEntity';
+import { Division } from './division.entity';
 import { Post } from './post.entity';
 import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { User } from 'src/users/entities/user.entity';
@@ -26,6 +27,12 @@ export class Team extends Common {
 
   @Column({ nullable: true, length: 450 })
   logo: string;
+
+  @OneToMany(() => Division, (division) => division.team, {
+    nullable: true,
+    cascade: true,
+  })
+  divisions: Division[];
 
   @OneToMany(() => User, (user) => user.team, {
     nullable: true,

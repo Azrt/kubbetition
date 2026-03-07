@@ -17,10 +17,13 @@ export class Event extends Common {
   @Column({ nullable: true, length: 450 })
   image: string;
 
-  // Participants stored as array of arrays of user IDs
-  // Example: [["uuid1", "uuid2"], ["uuid3", "uuid4"]] for 2v2, where each inner array is a team
+  /**
+   * Participants: array of teams. Each team is either:
+   * - string[] (legacy): user IDs
+   * - { userIds: string[], divisionId?: string, teamId?: string }: when joined via division, so round games can set game.team1Division/team2Division
+   */
   @Column({ type: 'json', nullable: true })
-  participants: Array<Array<string>>;
+  participants: Array<Array<string> | { userIds: string[]; divisionId?: string | null; teamId?: string | null }>;
 
   @Column({ length: 500 })
   details: string;

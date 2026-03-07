@@ -9,6 +9,7 @@ import { ParticipantsAreFriendsOrTeamMembersRule } from './validation/participan
 import { UsersService } from 'src/users/users.service';
 import { TeamsService } from 'src/teams/teams.service';
 import { Team } from 'src/teams/entities/team.entity';
+import { TeamsModule } from 'src/teams/teams.module';
 import { CreatedByUserRule } from './validation/created-by-user.rule';
 import { GameReadyRule } from './validation/game-ready.rule';
 import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
@@ -28,6 +29,7 @@ import { GamesSchedulerService } from './games-scheduler.service';
     TypeOrmModule.forFeature([Game, User, Team, FriendRequest]),
     forwardRef(() => AuthModule),
     FileUploadModule,
+    TeamsModule,
   ],
   controllers: [GamesController],
   providers: [

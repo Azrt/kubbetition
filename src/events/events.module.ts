@@ -12,6 +12,7 @@ import { JwtMiddleware } from 'src/auth/middleware/jwt.middleware';
 import { JwtService } from '@nestjs/jwt';
 import { UsersModule } from 'src/users/users.module';
 import { FileUploadModule } from 'src/common/modules/file-upload.module';
+import { TeamsModule } from 'src/teams/teams.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { FileUploadModule } from 'src/common/modules/file-upload.module';
     AuthModule,
     UsersModule,
     FileUploadModule,
+    TeamsModule,
   ],
   controllers: [EventsController],
   providers: [EventsService, JwtService],

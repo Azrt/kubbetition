@@ -200,7 +200,7 @@ export class EventsController {
     @Body() body: JoinEventDto,
     @Request() req: RequestWithUser,
   ): Promise<Event> {
-    return this.eventsService.join(eventId, body.team, req.user);
+    return this.eventsService.join(eventId, body, req.user);
   }
 
   @Post(':id/rounds/start')
