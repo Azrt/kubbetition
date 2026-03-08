@@ -74,8 +74,31 @@ export class TeamsService {
     });
   }
 
-  findAll(query?: PaginateQuery) {
-    return paginate(query, this.teamsRepository, TEAMS_PAGINATION_CONFIG);
+  findAll(query: PaginateQuery, options?: { includeInactive?: boolean }) {
+    const queryBuilder = this.teamsRepository
+      .createQueryBuilder('team')
+      .select([
+        'team.id',
+        'team.name',
+        'team.isActive',
+        'team.country',
+        'team.logo',
+        'team.createdAt',
+        'team.updatedAt',
+      ])
+      .loadRelationCountAndMap('team.membersCount', 'team.members');
+
+    if (!options?.includeInactive) {
+      queryBuilder.andWhere('team.isActive = :isActive', { isActive: true });
+    }
+
+    return paginate(query, queryBuilder, {
+      ...TEAMS_PAGINATION_CONFIG,
+      relations: undefined,
+      sortableColumns: ['id', 'name'],
+      searchableColumns: ['name'],
+      maxLimit: 10,
+    });
   }
 
   findOne(id: string) {

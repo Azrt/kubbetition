@@ -66,13 +66,16 @@ export class GamesController {
 
   @Get()
   @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   async findAll(
     @Paginate() query: PaginateQuery,
     @CurrentUser() currentUser: User,
     @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
     const includeCancelled = cancelled === 'true';
-    return this.gamesService.findAll(query, currentUser, includeCancelled);
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findAll(query, currentUser, includeCancelled, includeInProgress);
   }
 
   @Get("active")
@@ -82,24 +85,30 @@ export class GamesController {
 
   @Get("history")
   @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   findCurrentUserHistory(
     @CurrentUser() currentUser: User,
     @Paginate() query: PaginateQuery,
     @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
     const includeCancelled = cancelled === 'true';
-    return this.gamesService.findUserHistory(currentUser.id, query, includeCancelled);
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserHistory(currentUser.id, query, includeCancelled, includeInProgress);
   }
 
   @Get("history/:userId")
   @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   findUserHistory(
     @Param("userId") userId: string,
     @Paginate() query: PaginateQuery,
     @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
     const includeCancelled = cancelled === 'true';
-    return this.gamesService.findUserHistory(userId, query, includeCancelled);
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserHistory(userId, query, includeCancelled, includeInProgress);
   }
 
   @Get("division/:divisionId/stats")

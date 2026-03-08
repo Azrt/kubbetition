@@ -154,13 +154,29 @@ export class DivisionsService {
     return this.divisionsRepository.save(division);
   }
 
+  /** Member fields returned by list/read division endpoints. */
+  private mapMembersToSlim<T extends { members?: User[] }>(item: T): T {
+    if (item.members) {
+      item.members = item.members.map((m) => ({
+        id: m.id,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        image: m.image,
+        country: m.country,
+      })) as User[];
+    }
+    return item;
+  }
+
   async findAllByTeam(teamId: string, user: User): Promise<Division[]> {
     await this.ensureTeamAccess(teamId, user);
-    return this.divisionsRepository.find({
+    const divisions = await this.divisionsRepository.find({
       where: { team: { id: teamId } },
       relations: ['members'],
       order: { name: 'ASC' },
     });
+    divisions.forEach((d) => this.mapMembersToSlim(d));
+    return divisions;
   }
 
   async findOne(teamId: string, divisionId: string, user: User): Promise<Division> {
@@ -172,6 +188,7 @@ export class DivisionsService {
     if (!division) {
       throw new NotFoundException('Division not found');
     }
+    this.mapMembersToSlim(division);
     return division;
   }
 

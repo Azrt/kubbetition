@@ -10,6 +10,7 @@ import {
   OneToMany,
   OneToOne,
 } from 'typeorm';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 @Entity()
 export class Team extends Common {
@@ -39,6 +40,10 @@ export class Team extends Common {
     cascade: true,
   })
   members: Array<User>;
+
+  /** Number of members (set by loadRelationCountAndMap in list endpoints). */
+  @ApiPropertyOptional()
+  membersCount?: number;
 
   @OneToMany(() => TeamRequest, (request) => request.user, {
     nullable: true,

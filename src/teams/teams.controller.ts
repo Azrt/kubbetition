@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseInterceptors,
   UseGuards,
   UploadedFile,
@@ -14,7 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamMembersDto } from "./dto/update-team.dto";
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
@@ -64,9 +65,20 @@ export class TeamsController {
   }
 
   @Get()
+  @ApiQuery({
+    name: 'includeInactive',
+    required: false,
+    type: Boolean,
+    description: 'If true, include inactive teams (default: only active teams)',
+  })
   @PaginatedSwaggerDocs(CreateTeamDto, TEAMS_PAGINATION_CONFIG)
-  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<Team>> {
-    return this.teamsService.findAll(query);
+  findAll(
+    @Paginate() query: PaginateQuery,
+    @Query('includeInactive') includeInactive?: string,
+  ): Promise<Paginated<Team>> {
+    return this.teamsService.findAll(query, {
+      includeInactive: includeInactive === 'true',
+    });
   }
 
   @Get("me")

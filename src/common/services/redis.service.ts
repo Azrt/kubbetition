@@ -31,8 +31,8 @@ export class RedisService {
   }
 
   // Helper to generate cache keys
-  static gameHistoryKey(userId: string, page?: number, limit?: number, includeCancelled?: boolean): string {
-    return `game:history:${userId}:${page ?? 1}:${limit ?? 10}:${includeCancelled ?? false}`;
+  static gameHistoryKey(userId: string, page?: number, limit?: number, includeCancelled?: boolean, includeInProgress?: boolean): string {
+    return `game:history:${userId}:${page ?? 1}:${limit ?? 10}:${includeCancelled ?? false}:${includeInProgress ?? false}`;
   }
 
   static gameHistoryPattern(userId: string): string {

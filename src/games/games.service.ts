@@ -205,7 +205,7 @@ export class GamesService implements GamesServiceInterface {
     )`;
   }
 
-  async findAll(query: PaginateQuery, currentUser: User, includeCancelled = false) {
+  async findAll(query: PaginateQuery, currentUser: User, includeCancelled = false, includeInProgress = false) {
     const qb = this.gamesRepository
       .createQueryBuilder('game')
       .leftJoinAndSelect('game.createdBy', 'createdBy')
@@ -220,6 +220,10 @@ export class GamesService implements GamesServiceInterface {
 
     if (!includeCancelled) {
       qb.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
+    }
+
+    if (!includeInProgress) {
+      qb.andWhere('game.endTime IS NOT NULL');
     }
 
     if (!isAdminRole(currentUser)) {
@@ -445,10 +449,10 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
-  async findUserHistory(userId: string, query?: PaginateQuery, includeCancelled = false): Promise<Paginated<Game>> {
+  async findUserHistory(userId: string, query?: PaginateQuery, includeCancelled = false, includeInProgress = false): Promise<Paginated<Game>> {
     const page = query?.page ?? 1;
     const limit = query?.limit ?? 10;
-    const cacheKey = RedisService.gameHistoryKey(userId, page, limit, includeCancelled);
+    const cacheKey = RedisService.gameHistoryKey(userId, page, limit, includeCancelled, includeInProgress);
 
     // Try to get from cache
     const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
@@ -466,12 +470,15 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
       .leftJoinAndSelect('game.team1Division', 'team1Division')
       .leftJoinAndSelect('game.team2Division', 'team2Division')
-      .where('game.endTime IS NOT NULL')
       .andWhere(
         '(team1Members.id = :userId OR team2Members.id = :userId)',
         { userId }
       )
-      .orderBy('game.endTime', 'DESC');
+      .orderBy({ 'game.endTime': { order: 'DESC', nulls: 'NULLS LAST' } });
+
+    if (!includeInProgress) {
+      queryBuilder.andWhere('game.endTime IS NOT NULL');
+    }
 
     if (!includeCancelled) {
       queryBuilder.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
