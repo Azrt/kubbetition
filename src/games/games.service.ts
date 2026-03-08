@@ -433,8 +433,18 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(savedGame.id);
   }
 
-  remove(id: string) {
-    return `This action removes a #${id} game`;
+  async remove(id: string): Promise<void> {
+    const game = await this.gamesRepository.findOne({
+      where: { id },
+      relations: ['participants', 'team1Members', 'team2Members'],
+    });
+    if (!game) return;
+
+    game.participants = [];
+    game.team1Members = [];
+    game.team2Members = [];
+    await this.gamesRepository.save(game);
+    await this.gamesRepository.delete(id);
   }
 
   async findAllUserActive(user: User) {

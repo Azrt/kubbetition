@@ -18,6 +18,7 @@ import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('auth')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -45,6 +46,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
   @Post("google/login")
   async googleTokenLogin(
     @Body() params: GoogleLoginDto,
@@ -71,6 +73,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
   @Post("refresh")
   async refreshTokens(
     @Body() params: RefreshTokenDto,

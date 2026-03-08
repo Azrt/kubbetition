@@ -1,11 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsOptional,
   IsString,
   IsUrl,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { PostType } from '../enums/post-type.enum';
 
@@ -34,5 +36,7 @@ export class UpdatePostDto {
 
   @ApiPropertyOptional({ description: 'Optional due date (ISO 8601). Set to null to clear.' })
   @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== '')
+  @IsDateString()
   dueDate?: string | null;
 }

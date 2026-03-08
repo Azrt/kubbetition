@@ -45,6 +45,8 @@ export const configValidationSchema = Joi.object({
   CLOUDFLARE_PRIVATE_CDN_URL: Joi.string().uri().optional(),
   // Optional CORS allowed origins (comma-separated). Defaults to none (rejects browser cross-origin requests).
   CORS_ALLOWED_ORIGINS: Joi.string().optional(),
+  // Optional: number of proxies to trust (1 = trust first X-Forwarded-* header). Set to match your reverse proxy chain.
+  TRUST_PROXY: Joi.string().optional(),
   // Optional rate limiting (defaults: 20/1s, 100/10s, 300/60s)
   THROTTLE_SHORT_LIMIT: Joi.number().optional(),
   THROTTLE_SHORT_TTL_MS: Joi.number().optional(),
@@ -52,4 +54,6 @@ export const configValidationSchema = Joi.object({
   THROTTLE_MEDIUM_TTL_MS: Joi.number().optional(),
   THROTTLE_LONG_LIMIT: Joi.number().optional(),
   THROTTLE_LONG_TTL_MS: Joi.number().optional(),
+  // Optional: when SEED_DATABASE=true, use this email for the seeded admin user (avoids predictable seed data).
+  SEED_ADMIN_EMAIL: Joi.string().email().optional(),
 });

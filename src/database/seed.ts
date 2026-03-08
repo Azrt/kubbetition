@@ -64,7 +64,8 @@ function getRandomInt(min: number, max: number): number {
 
 function generateRandomEmail(firstName: string, lastName: string, index: number): string {
   const domains = ['example.com', 'test.com', 'seed.com', 'demo.com'];
-  return `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${index}@${getRandomElement(domains)}`;
+  const suffix = Math.random().toString(36).slice(2, 10);
+  return `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${index}.${suffix}@${getRandomElement(domains)}`;
 }
 
 export async function seedDatabase(dataSource: DataSource): Promise<void> {
@@ -95,17 +96,21 @@ export async function seedDatabase(dataSource: DataSource): Promise<void> {
   try {
     // Create 100 users
     console.log('Creating 100 users...');
+    const adminEmail = process.env.SEED_ADMIN_EMAIL;
     const users: User[] = [];
     for (let i = 0; i < 100; i++) {
       const firstName = getRandomElement(FIRST_NAMES);
       const lastName = getRandomElement(LAST_NAMES);
+      const email = i === 0 && adminEmail
+        ? adminEmail
+        : generateRandomEmail(firstName, lastName, i);
       const user = userRepository.create({
-        email: generateRandomEmail(firstName, lastName, i),
+        email,
         firstName,
         lastName,
         isActive: true,
         isEmailConfirmed: true,
-        role: i === 0 ? Role.ADMIN : Role.USER, // First user is admin
+        role: i === 0 ? Role.ADMIN : Role.USER,
         country: getRandomElement(COUNTRIES),
       });
       users.push(user);

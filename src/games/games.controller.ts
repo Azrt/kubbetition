@@ -180,7 +180,8 @@ export class GamesController {
     if (game.createdBy?.id !== currentUser.id && !isAdminRole(currentUser)) {
       throw new ForbiddenException('Only the game creator or an admin can delete a game');
     }
-    return this.gamesService.remove(gameId);
+    await this.gamesService.remove(gameId);
+    return { message: 'Game deleted' };
   }
 
   @Patch(":gameId/end")

@@ -20,9 +20,15 @@ async function bootstrap() {
 
   app.use(helmet());
 
-  // Trust proxy so rate limiting uses correct client IP (e.g. X-Forwarded-For)
-  app.set('trust proxy', 1);
-  
+  const configService = app.get(ConfigService);
+  const trustProxy = configService.get<string>('TRUST_PROXY');
+  if (trustProxy !== undefined && trustProxy !== '') {
+    const num = parseInt(trustProxy, 10);
+    app.set('trust proxy', Number.isNaN(num) ? 1 : num);
+  } else {
+    app.set('trust proxy', 1);
+  }
+
   // Run database seeding if conditions are met
   try {
     const dataSource = app.get(DataSource);
@@ -31,8 +37,6 @@ async function bootstrap() {
     console.error('Failed to seed database:', error);
     // Continue with app startup even if seeding fails
   }
-
-  const configService = app.get(ConfigService);
   const allowedOriginsRaw = configService.get<string>('CORS_ALLOWED_ORIGINS');
   const allowedOrigins = allowedOriginsRaw
     ? allowedOriginsRaw.split(',').map(o => o.trim()).filter(Boolean)

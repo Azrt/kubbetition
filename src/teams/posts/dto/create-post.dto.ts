@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsOptional,
   IsString,
@@ -38,6 +39,6 @@ export class CreatePostDto {
 
   @ApiPropertyOptional({ description: 'Optional due date - post hidden after this date (ISO 8601)' })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dueDate?: string;
 }
