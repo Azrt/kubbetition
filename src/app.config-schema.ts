@@ -42,4 +42,11 @@ export const configValidationSchema = Joi.object({
   // Optional Cloudflare CDN configuration
   CLOUDFLARE_PUBLIC_CDN_URL: Joi.string().uri().optional(),
   CLOUDFLARE_PRIVATE_CDN_URL: Joi.string().uri().optional(),
+  // Optional rate limiting (defaults: 20/1s, 100/10s, 300/60s)
+  THROTTLE_SHORT_LIMIT: Joi.number().optional(),
+  THROTTLE_SHORT_TTL_MS: Joi.number().optional(),
+  THROTTLE_MEDIUM_LIMIT: Joi.number().optional(),
+  THROTTLE_MEDIUM_TTL_MS: Joi.number().optional(),
+  THROTTLE_LONG_LIMIT: Joi.number().optional(),
+  THROTTLE_LONG_TTL_MS: Joi.number().optional(),
 });

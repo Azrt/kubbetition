@@ -10,9 +10,13 @@ import {
 import { useContainer } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { seedDatabase } from './database/seed';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Trust proxy so rate limiting uses correct client IP (e.g. X-Forwarded-For)
+  app.set('trust proxy', 1);
   
   // Run database seeding if conditions are met
   try {

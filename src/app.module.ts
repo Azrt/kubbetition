@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DevtoolsModule } from '@nestjs/devtools-integration';
@@ -40,6 +42,34 @@ import { EventsModule } from './events/events.module';
       isGlobal: true,
       validationSchema: configValidationSchema,
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: "short",
+            ttl: config.get("THROTTLE_SHORT_TTL_MS", 1000),
+            limit: config.get("THROTTLE_SHORT_LIMIT", 20),
+          },
+          {
+            name: "medium",
+            ttl: config.get("THROTTLE_MEDIUM_TTL_MS", 10_000),
+            limit: config.get("THROTTLE_MEDIUM_LIMIT", 100),
+          },
+          {
+            name: "long",
+            ttl: config.get("THROTTLE_LONG_TTL_MS", 60_000),
+            limit: config.get("THROTTLE_LONG_LIMIT", 300),
+          },
+        ],
+        skipIf: (context) => {
+          const request = context.switchToHttp().getRequest();
+          const path = request?.url?.split("?")[0] ?? "";
+          return path === "/swagger" || path.startsWith("/swagger/") || path === "/swagger-json";
+        },
+      }),
+    }),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot({
       verboseMemoryLeak: process.env.NODE_ENV !== "production",
@@ -70,7 +100,14 @@ import { EventsModule } from './events/events.module';
     EventsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, GoogleStrategy],
+  providers: [
+    AppService,
+    GoogleStrategy,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
   exports: [AppService],
 })
 export class AppModule {
