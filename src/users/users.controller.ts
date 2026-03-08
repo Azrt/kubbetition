@@ -10,8 +10,11 @@ import {
   UploadedFile,
   Query,
   ForbiddenException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
+import { isAdminRole } from 'src/common/helpers/user';
 import { UsersService } from './users.service';
+import { AuthService } from 'src/auth/auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -41,6 +44,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly fileUploadService: FileUploadService,
+    private readonly authService: AuthService,
   ) {}
 
   @Get()
@@ -159,12 +163,26 @@ export class UsersController {
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
+  update(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
     return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(":id")
-  remove(@Param("id") id: string) {
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('You can only delete your own account');
+    }
+    await this.authService.revokeAllUserTokens(id);
     return this.usersService.remove(id);
   }
 

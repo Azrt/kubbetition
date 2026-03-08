@@ -11,18 +11,21 @@ import { Event } from '../../events/entities/event.entity';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: "postgres",
-        host: configService.get("POSTGRES_HOST"),
-        port: configService.get("POSTGRES_PORT"),
-        username: configService.get("POSTGRES_USER"),
-        password: configService.get("POSTGRES_PASSWORD"),
-        database: configService.get("POSTGRES_DB"),
-        entities: [User, Team, Game, Event],
-        synchronize: true,
-        logging: true,
-        autoLoadEntities: true,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isProduction = configService.get('NODE_ENV') === 'production';
+        return {
+          type: "postgres",
+          host: configService.get("POSTGRES_HOST"),
+          port: configService.get("POSTGRES_PORT"),
+          username: configService.get("POSTGRES_USER"),
+          password: configService.get("POSTGRES_PASSWORD"),
+          database: configService.get("POSTGRES_DB"),
+          entities: [User, Team, Game, Event],
+          synchronize: !isProduction,
+          logging: !isProduction,
+          autoLoadEntities: true,
+        };
+      },
     }),
   ],
 })

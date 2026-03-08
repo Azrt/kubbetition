@@ -52,6 +52,7 @@
     "geoip-lite": "^1.4.10",
     "google-auth-library": "^9.4.2",
     "googleapis": "^131.0.0",
+    "helmet": "^8.1.0",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",

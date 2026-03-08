@@ -1,6 +1,7 @@
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable } from "@nestjs/common";
 import { Cache } from 'cache-manager';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class RedisService {
@@ -30,12 +31,47 @@ export class RedisService {
     }
   }
 
-  // Helper to generate cache keys
   static gameHistoryKey(userId: string, page?: number, limit?: number, includeCancelled?: boolean, includeInProgress?: boolean): string {
     return `game:history:${userId}:${page ?? 1}:${limit ?? 10}:${includeCancelled ?? false}:${includeInProgress ?? false}`;
   }
 
   static gameHistoryPattern(userId: string): string {
     return `game:history:${userId}:*`;
+  }
+
+  static hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  static refreshTokenKey(userId: string, tokenHash: string): string {
+    return `refresh_token:${userId}:${tokenHash}`;
+  }
+
+  static refreshTokenPattern(userId: string): string {
+    return `refresh_token:${userId}:*`;
+  }
+
+  async storeRefreshToken(userId: string, token: string, ttlMs: number): Promise<void> {
+    const hash = RedisService.hashToken(token);
+    const key = RedisService.refreshTokenKey(userId, hash);
+    await this.set(key, userId, ttlMs);
+  }
+
+  async verifyRefreshToken(userId: string, token: string): Promise<boolean> {
+    const hash = RedisService.hashToken(token);
+    const key = RedisService.refreshTokenKey(userId, hash);
+    const stored = await this.get<string>(key);
+    return stored !== null && stored !== undefined;
+  }
+
+  async revokeRefreshToken(userId: string, token: string): Promise<void> {
+    const hash = RedisService.hashToken(token);
+    const key = RedisService.refreshTokenKey(userId, hash);
+    await this.del(key);
+  }
+
+  async revokeAllUserRefreshTokens(userId: string): Promise<void> {
+    const pattern = RedisService.refreshTokenPattern(userId);
+    await this.delByPattern(pattern);
   }
 }

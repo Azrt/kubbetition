@@ -53,7 +53,7 @@ export class AuthController {
   ): Promise<any> {
     try {
       const user = await this.authService.googleTokenLogin(params.token, req);
-      const tokens = this.authService.generateTokens(user);
+      const tokens = await this.authService.generateTokens(user);
 
       const data = {
         user,
@@ -64,7 +64,7 @@ export class AuthController {
     } catch (e) {
       res.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
-        message: e?.message ?? 'Google login failed',
+        message: 'Google login failed',
         error: 'Bad Request',
       });
     }
@@ -80,8 +80,14 @@ export class AuthController {
       const tokens = await this.authService.refreshTokens(params.refreshToken);
       res.status(HttpStatus.OK).json(tokens);
     } catch (e) {
-      res.status(HttpStatus.UNAUTHORIZED).json({ message: e.message });
+      res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Invalid or expired refresh token' });
     }
+  }
+
+  @Post("logout")
+  async logout(@CurrentUser() user: User) {
+    await this.authService.revokeAllUserTokens(user.id);
+    return { message: 'Logged out successfully' };
   }
 
   @Get("me")

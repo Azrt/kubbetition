@@ -12,9 +12,12 @@ import { useContainer } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { seedDatabase } from './database/seed';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  app.use(helmet());
 
   // Trust proxy so rate limiting uses correct client IP (e.g. X-Forwarded-For)
   app.set('trust proxy', 1);

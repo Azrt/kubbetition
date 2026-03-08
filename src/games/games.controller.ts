@@ -169,16 +169,40 @@ export class GamesController {
   }
 
   @Delete(":gameId")
-  remove(@Param("gameId") gameId: string) {
+  async remove(
+    @Param("gameId") gameId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const game = await this.gamesService.findOne(gameId, currentUser);
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+    if (game.createdBy?.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only the game creator or an admin can delete a game');
+    }
     return this.gamesService.remove(gameId);
   }
 
   @Patch(":gameId/end")
-  async end(@Param() params: EndGameDto) {
-    const game = await this.gamesService.endGame(params.gameId);
-    await this.gamesGateway.sendGameDataToClients(game);
+  async end(
+    @Param() params: EndGameDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    const game = await this.gamesService.findOne(params.gameId, currentUser);
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+    const isParticipant = game.participants?.some(p => p.id === currentUser.id) ||
+      game.team1Members?.some(m => m.id === currentUser.id) ||
+      game.team2Members?.some(m => m.id === currentUser.id);
+    if (!isParticipant && game.createdBy?.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only game participants, the creator, or an admin can end a game');
+    }
 
-    return game;
+    const endedGame = await this.gamesService.endGame(params.gameId);
+    await this.gamesGateway.sendGameDataToClients(endedGame);
+
+    return endedGame;
   }
 
   @UseInterceptors(ParamContextInterceptor)

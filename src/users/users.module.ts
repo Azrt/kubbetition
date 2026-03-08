@@ -16,9 +16,10 @@ import { UserExistsRule } from 'src/common/validators/user-exists.rule';
 import { FriendRequestExistsRule } from './validators/friend-request-exists.rule';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { FileUploadModule } from 'src/common/modules/file-upload.module';
+import { RedisModule } from 'src/common/modules/redis.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Team, FriendRequest]), FileUploadModule],
+  imports: [TypeOrmModule.forFeature([User, Team, FriendRequest]), FileUploadModule, RedisModule],
   controllers: [UsersController],
   providers: [
     UsersService,
