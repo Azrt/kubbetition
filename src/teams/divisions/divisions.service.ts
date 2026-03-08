@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,7 +13,7 @@ import { User } from 'src/users/entities/user.entity';
 import { CreateDivisionDto } from './dto/create-division.dto';
 import { UpdateDivisionDto } from './dto/update-division.dto';
 import { GameType, DIVISION_GAME_TYPES } from 'src/common/enums/gameType';
-import { isAdminRole } from 'src/common/helpers/user';
+import { isAdminRole, isSupervisorRole } from 'src/common/helpers/user';
 
 @Injectable()
 export class DivisionsService {
@@ -80,8 +81,53 @@ export class DivisionsService {
     return team;
   }
 
+  /** Only SUPERVISOR (of this team) or global admin can create, update or delete divisions. */
+  private async ensureCanManageDivisions(teamId: string, user: User): Promise<Team> {
+    const team = await this.teamsRepository.findOne({
+      where: { id: teamId },
+      relations: ['members'],
+    });
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+    if (isAdminRole(user)) {
+      return team;
+    }
+    const isMember = team.members?.some((m) => m.id === user.id);
+    if (!isMember || !isSupervisorRole(user)) {
+      throw new ForbiddenException(
+        'Only the team supervisor or an admin can create, update or delete divisions',
+      );
+    }
+    return team;
+  }
+
+  /**
+   * Returns a division of this team that has the exact same set of member IDs (order-independent).
+   * Optionally exclude a division by id (e.g. when updating).
+   */
+  private async findDivisionWithSameMembers(
+    teamId: string,
+    memberIds: string[],
+    excludeDivisionId?: string,
+  ): Promise<Division | null> {
+    const sortedIds = [...memberIds].sort();
+    const divisions = await this.divisionsRepository.find({
+      where: { team: { id: teamId } },
+      relations: ['members'],
+    });
+    for (const div of divisions) {
+      if (excludeDivisionId && div.id === excludeDivisionId) continue;
+      const divIds = (div.members ?? []).map((m) => m.id).sort();
+      if (divIds.length === sortedIds.length && divIds.every((id, i) => id === sortedIds[i])) {
+        return div;
+      }
+    }
+    return null;
+  }
+
   async create(teamId: string, dto: CreateDivisionDto, user: User): Promise<Division> {
-    await this.ensureTeamAccess(teamId, user);
+    await this.ensureCanManageDivisions(teamId, user);
     this.assertDivisionGameType(dto.type);
     this.assertMemberCountMatchesType(dto.memberIds, dto.type);
 
@@ -91,6 +137,13 @@ export class DivisionsService {
     }
 
     const members = await this.assertMembersBelongToTeam(teamId, dto.memberIds);
+
+    const existing = await this.findDivisionWithSameMembers(teamId, dto.memberIds);
+    if (existing) {
+      throw new ConflictException(
+        'A division with the same members already exists in this team',
+      );
+    }
 
     const division = this.divisionsRepository.create({
       name: dto.name,
@@ -128,6 +181,7 @@ export class DivisionsService {
     dto: UpdateDivisionDto,
     user: User,
   ): Promise<Division> {
+    await this.ensureCanManageDivisions(teamId, user);
     const division = await this.findOne(teamId, divisionId, user);
 
     if (dto.type !== undefined) {
@@ -143,6 +197,16 @@ export class DivisionsService {
     }
 
     if (dto.memberIds) {
+      const existing = await this.findDivisionWithSameMembers(
+        teamId,
+        dto.memberIds,
+        divisionId,
+      );
+      if (existing) {
+        throw new ConflictException(
+          'Another division in this team already has the same members',
+        );
+      }
       division.members = await this.assertMembersBelongToTeam(teamId, dto.memberIds);
     }
     if (dto.name !== undefined) {
@@ -155,6 +219,7 @@ export class DivisionsService {
   }
 
   async remove(teamId: string, divisionId: string, user: User): Promise<void> {
+    await this.ensureCanManageDivisions(teamId, user);
     await this.findOne(teamId, divisionId, user);
     await this.divisionsRepository.delete({ id: divisionId, team: { id: teamId } });
   }

@@ -92,7 +92,6 @@ export class PostsService {
   async findAll(teamId: string, query: PaginateQuery, user: User) {
     const qb = this.postsRepository
       .createQueryBuilder('post')
-      .leftJoinAndSelect('post.team', 'team')
       .andWhere('post.teamId = :teamId', { teamId });
 
     const now = new Date();

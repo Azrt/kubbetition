@@ -205,7 +205,7 @@ export class GamesService implements GamesServiceInterface {
     )`;
   }
 
-  findAll(query: PaginateQuery, currentUser: User, includeCancelled = false) {
+  async findAll(query: PaginateQuery, currentUser: User, includeCancelled = false) {
     const qb = this.gamesRepository
       .createQueryBuilder('game')
       .leftJoinAndSelect('game.createdBy', 'createdBy')
@@ -214,6 +214,8 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
       .leftJoinAndSelect('game.team2Members', 'team2Members')
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
       .leftJoinAndSelect('game.event', 'event');
 
     if (!includeCancelled) {
@@ -233,10 +235,12 @@ export class GamesService implements GamesServiceInterface {
       );
     }
 
-    return paginate(query, qb, {
+    const result = await paginate(query, qb, {
       ...GAMES_PAGINATION_CONFIG,
       relations: undefined,
     } as any);
+    result.data = result.data.map((g) => this.trimGameForList(g));
+    return result;
   }
 
   /**
@@ -460,6 +464,8 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
       .leftJoinAndSelect('game.team2Members', 'team2Members')
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
       .where('game.endTime IS NOT NULL')
       .andWhere(
         '(team1Members.id = :userId OR team2Members.id = :userId)',
@@ -479,6 +485,9 @@ export class GamesService implements GamesServiceInterface {
 
     // Compute properties for each game
     result.data.forEach(game => this.computeGameProperties(game));
+
+    // Trim payload to only necessary fields for list view
+    result.data = result.data.map((g) => this.trimGameForList(g));
 
     // Store in cache
     await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
@@ -745,6 +754,44 @@ export class GamesService implements GamesServiceInterface {
     const teamMembers = team === 1 ? game.team1Members : game.team2Members;
     const isInTeam = teamMembers?.some(m => m.id === user.id);
     return isInTeam || false;
+  }
+
+  /**
+   * Trims game entity to only fields needed for list responses (/games, /games/history).
+   * Game: id, isCancelled, type, duration, team1Score, team2Score, round, socialPhoto.
+   * Event: id, name, type (gameType). Members: id, firstName, lastName, image, team: { id, name }.
+   * Divisions (optional): id, name.
+   */
+  private trimGameForList(game: Game): Game {
+    const trimTeam = (t: { id: string; name: string } | undefined) =>
+      t ? { id: t.id, name: t.name } : undefined;
+    const trimDivision = (d: Game['team1Division']) =>
+      d ? { id: d.id, name: d.name } : undefined;
+    const trimMember = (m: User) => ({
+      id: m.id,
+      firstName: m.firstName,
+      lastName: m.lastName,
+      image: m.image,
+      team: m.team ? trimTeam(m.team) : undefined,
+    });
+    const trimEvent = (e: Game['event']) =>
+      e ? { id: e.id, name: e.name, type: e.gameType } : undefined;
+
+    return {
+      id: game.id,
+      isCancelled: game.isCancelled,
+      type: game.type,
+      duration: game.duration,
+      team1Score: game.team1Score,
+      team2Score: game.team2Score,
+      round: game.round,
+      socialPhoto: game.socialPhoto,
+      event: trimEvent(game.event) as unknown as Game['event'],
+      team1Division: trimDivision(game.team1Division) as Game['team1Division'],
+      team2Division: trimDivision(game.team2Division) as Game['team2Division'],
+      team1Members: (game.team1Members ?? []).map(trimMember) as User[],
+      team2Members: (game.team2Members ?? []).map(trimMember) as User[],
+    } as Game;
   }
 
   // Helper to compute properties after loading
