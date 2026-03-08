@@ -65,11 +65,14 @@ export class GamesController {
   }
 
   @Get()
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
   async findAll(
     @Paginate() query: PaginateQuery,
     @CurrentUser() currentUser: User,
+    @Query('cancelled') cancelled?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findAll(query, currentUser);
+    const includeCancelled = cancelled === 'true';
+    return this.gamesService.findAll(query, currentUser, includeCancelled);
   }
 
   @Get("active")
@@ -78,19 +81,25 @@ export class GamesController {
   }
 
   @Get("history")
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
   findCurrentUserHistory(
     @CurrentUser() currentUser: User,
-    @Paginate() query: PaginateQuery
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findUserHistory(currentUser.id, query);
+    const includeCancelled = cancelled === 'true';
+    return this.gamesService.findUserHistory(currentUser.id, query, includeCancelled);
   }
 
   @Get("history/:userId")
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
   findUserHistory(
     @Param("userId") userId: string,
-    @Paginate() query: PaginateQuery
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findUserHistory(userId, query);
+    const includeCancelled = cancelled === 'true';
+    return this.gamesService.findUserHistory(userId, query, includeCancelled);
   }
 
   @Get("division/:divisionId/stats")

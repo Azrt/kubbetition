@@ -205,7 +205,7 @@ export class GamesService implements GamesServiceInterface {
     )`;
   }
 
-  findAll(query: PaginateQuery, currentUser: User) {
+  findAll(query: PaginateQuery, currentUser: User, includeCancelled = false) {
     const qb = this.gamesRepository
       .createQueryBuilder('game')
       .leftJoinAndSelect('game.createdBy', 'createdBy')
@@ -215,6 +215,10 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('game.team2Members', 'team2Members')
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
       .leftJoinAndSelect('game.event', 'event');
+
+    if (!includeCancelled) {
+      qb.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
+    }
 
     if (!isAdminRole(currentUser)) {
       // For regular users, filter by:
@@ -437,10 +441,10 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
-  async findUserHistory(userId: string, query?: PaginateQuery): Promise<Paginated<Game>> {
+  async findUserHistory(userId: string, query?: PaginateQuery, includeCancelled = false): Promise<Paginated<Game>> {
     const page = query?.page ?? 1;
     const limit = query?.limit ?? 10;
-    const cacheKey = RedisService.gameHistoryKey(userId, page, limit);
+    const cacheKey = RedisService.gameHistoryKey(userId, page, limit, includeCancelled);
 
     // Try to get from cache
     const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
@@ -457,12 +461,15 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('game.team2Members', 'team2Members')
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
       .where('game.endTime IS NOT NULL')
-      .andWhere('game.isCancelled = :isCancelled', { isCancelled: false })
       .andWhere(
         '(team1Members.id = :userId OR team2Members.id = :userId)',
         { userId }
       )
       .orderBy('game.endTime', 'DESC');
+
+    if (!includeCancelled) {
+      queryBuilder.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
+    }
 
     const result = await paginate(query, queryBuilder, {
       sortableColumns: ['id', 'endTime', 'startTime'],
