@@ -3,9 +3,11 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, Not, Repository } from "typeorm";
 import { TeamRequest } from "./entities/team-request.entity";
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
-import { PaginateConfig, PaginateQuery, paginate } from "nestjs-paginate";
+import { PaginateConfig, PaginateQuery, Paginated, paginate } from "nestjs-paginate";
 import { TEAM_REQUESTS_PAGINATION_CONFIG } from "./team-requests.constants";
 import { User } from "src/users/entities/user.entity";
+import { toSimpleUser } from "src/common/dto/simple-user.dto";
+import { TeamRequestListItemDto } from "./dto/team-request-list-item.dto";
 import { Team } from "src/teams/entities/team.entity";
 import { TeamRequestStatus } from "./enums/team-request-status.enum";
 import { isAdminRole, isUserRole } from "src/common/helpers/user";
@@ -68,7 +70,7 @@ export class TeamRequestsService {
     });
   }
 
-  findAll(query: PaginateQuery, user: User) {
+  async findAll(query: PaginateQuery, user: User): Promise<Paginated<TeamRequestListItemDto>> {
     const isUser = isUserRole(user);
     const config: PaginateConfig<TeamRequest> = {
       ...TEAM_REQUESTS_PAGINATION_CONFIG,
@@ -82,7 +84,16 @@ export class TeamRequestsService {
       },
     };
 
-    return paginate(query, this.teamRequestsRepository, config);
+    const result = await paginate(query, this.teamRequestsRepository, config);
+    const data: TeamRequestListItemDto[] = result.data.map((tr) => ({
+      id: tr.id,
+      createdAt: tr.createdAt,
+      updatedAt: tr.updatedAt,
+      message: tr.message ?? null,
+      status: tr.status,
+      user: toSimpleUser(tr.user),
+    }));
+    return { ...result, data } as Paginated<TeamRequestListItemDto>;
   }
 
   findByUserId(id: string) {
@@ -96,12 +107,12 @@ export class TeamRequestsService {
     });
   }
 
-  getMyLatestTeamRequest(user: User) {
+  async getMyLatestTeamRequest(user: User): Promise<TeamRequestListItemDto | null> {
     if (!user?.id) {
       return null;
     }
 
-    return this.teamRequestsRepository
+    const teamRequest = await this.teamRequestsRepository
       .createQueryBuilder("teamRequest")
       .leftJoinAndSelect("teamRequest.team", "team")
       .leftJoinAndSelect("teamRequest.user", "user")
@@ -109,6 +120,17 @@ export class TeamRequestsService {
       .andWhere("teamRequest.status != :archivedStatus", { archivedStatus: TeamRequestStatus.ARCHIVED })
       .orderBy("teamRequest.createdAt", "DESC")
       .getOne();
+
+    if (!teamRequest) return null;
+
+    return {
+      id: teamRequest.id,
+      createdAt: teamRequest.createdAt,
+      updatedAt: teamRequest.updatedAt,
+      message: teamRequest.message ?? null,
+      status: teamRequest.status,
+      user: toSimpleUser(teamRequest.user),
+    };
   }
 
   async isFromSameTeam(id: string, user: User) {

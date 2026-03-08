@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
 import { TeamRequestsService } from "./team-requests.service";
 import { Paginate, PaginateQuery, Paginated } from "nestjs-paginate";
-import { TeamRequest } from "./entities/team-request.entity";
+import { TeamRequestListItemDto } from "./dto/team-request-list-item.dto";
 import { User } from "src/users/entities/user.entity";
 import { CurrentUser } from "src/common/decorators/currentUser.decorator";
 import { EmptyTeamGuard } from "src/common/guards/empty-team.guard";
@@ -32,12 +32,12 @@ export class TeamRequestsController {
   findAll(
     @Paginate() query: PaginateQuery,
     @CurrentUser() user: User
-  ): Promise<Paginated<TeamRequest>> {
+  ): Promise<Paginated<TeamRequestListItemDto>> {
     return this.teamRequestsService.findAll(query, user);
   }
 
   @Get("me")
-  getMyLatestTeamRequest(@CurrentUser() user: User) {
+  getMyLatestTeamRequest(@CurrentUser() user: User): Promise<TeamRequestListItemDto | null> {
     return this.teamRequestsService.getMyLatestTeamRequest(user);
   }
 

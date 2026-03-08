@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SimpleUserDto } from 'src/common/dto/simple-user.dto';
 
 export class SearchUserTeamDto {
   @ApiProperty()
@@ -8,25 +9,7 @@ export class SearchUserTeamDto {
   name: string;
 }
 
-export class SearchUserResponseDto {
-  @ApiProperty()
-  id: string;
-
-  @ApiProperty()
-  email: string;
-
-  @ApiProperty()
-  firstName: string;
-
-  @ApiProperty()
-  lastName: string;
-
-  @ApiPropertyOptional({ nullable: true })
-  image: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  country: string | null;
-
+export class SearchUserResponseDto extends SimpleUserDto {
   @ApiPropertyOptional({ type: SearchUserTeamDto, nullable: true })
   team: SearchUserTeamDto | null;
 }

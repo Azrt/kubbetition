@@ -13,6 +13,7 @@ import { MobileTokenResponse } from './types/mobile-token-response.type';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { USERS_PAGINATION_CONFIG } from './users.constants';
 import { SearchUserResponseDto } from './dto/search-user-response.dto';
+import { toSimpleUser } from 'src/common/dto/simple-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -85,12 +86,8 @@ export class UsersService {
 
     const users = await queryBuilder.take(take).getMany();
     return users.map((user) => ({
-      id: user.id,
+      ...toSimpleUser(user),
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      image: user.image ?? null,
-      country: user.country ?? null,
       team: user.team
         ? { id: user.team.id, name: user.team.name }
         : null,
