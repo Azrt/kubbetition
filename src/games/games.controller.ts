@@ -10,6 +10,8 @@ import { BodyContextInterceptor } from 'src/common/interceptors/body-context.int
 import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/role.enum';
 import { User } from 'src/users/entities/user.entity';
 import { CancelGameDto } from './dto/cancel-game.dto';
 import { EndGameDto } from './dto/end-game.dto';
@@ -30,6 +32,7 @@ import { DivisionStatsDto } from 'src/teams/divisions/dto/division-stats.dto';
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
+@Roles(Role.ADMIN, Role.SUPERADMIN)
 export class GamesController {
   constructor(
     private readonly gamesService: GamesService,
