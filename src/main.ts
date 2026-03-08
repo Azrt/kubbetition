@@ -7,6 +7,7 @@ import {
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
+import { QueryFailedExceptionFilter } from './common/filters/query-failed-exception.filter';
 import { useContainer } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { seedDatabase } from './database/seed';
@@ -32,6 +33,8 @@ async function bootstrap() {
     origin: true, // Allow all origins for mobile apps
     credentials: true,
   });
+
+  app.useGlobalFilters(new QueryFailedExceptionFilter());
 
   // enable validation globally
   // this is from NestJS docs
