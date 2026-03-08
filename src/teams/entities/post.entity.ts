@@ -1,12 +1,14 @@
 import { Common } from 'src/common/entities/CommonEntity';
 import { Team } from 'src/teams/entities/team.entity';
-import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
+import { Column, Entity, Index, ManyToOne, OneToMany } from 'typeorm';
 import { PostType } from '../posts/enums/post-type.enum';
 import { PostReaction } from './post-reaction.entity';
 
 @Entity()
+@Index('IDX_post_due_date', ['dueDate'])
+@Index('IDX_post_pinned', ['pinned'])
 export class Post extends Common {
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', length: 10000 })
   body: string;
 
   @Column({
@@ -26,6 +28,7 @@ export class Post extends Common {
   dueDate: Date | null;
 
   @ManyToOne(() => Team, (team) => team.posts, { nullable: false, onDelete: 'CASCADE' })
+  @Index('IDX_post_team')
   team: Team;
 
   @OneToMany(() => PostReaction, (reaction) => reaction.post, { cascade: true })

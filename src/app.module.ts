@@ -31,6 +31,7 @@ import { EventsModule } from './events/events.module';
     MulterModule.register({
       dest: "./uploads",
       preservePath: true,
+      limits: { fileSize: 10 * 1024 * 1024 },
     }),
     ConfigModule.forRoot({
       envFilePath: [".local.env", ".env"],

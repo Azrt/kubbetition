@@ -155,12 +155,9 @@ export class AuthService {
     try {
       let user: CreateUserDto;
 
-      // Try to verify as ID token first (from Android/iOS apps)
-      // ID tokens are JWTs that start with "eyJ"
-      if (token.startsWith('eyJ')) {
+      try {
         user = await this.verifyGoogleIdToken(token);
-      } else {
-        // Fall back to access token verification (for web clients)
+      } catch {
         user = await this.getGoogleUserByAccessToken(token);
       }
 

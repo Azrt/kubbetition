@@ -1,13 +1,17 @@
 import { Common } from "src/common/entities/CommonEntity";
 import { GameType } from "src/common/enums/gameType";
 import { User } from "src/users/entities/user.entity";
-import { Column, Entity, Index, JoinTable, ManyToMany, ManyToOne } from "typeorm";
+import { Check, Column, Entity, Index, JoinTable, ManyToMany, ManyToOne } from "typeorm";
 import { Event as EventEntity } from "src/events/entities/event.entity";
 import { Division } from "src/teams/entities/division.entity";
 
 @Entity()
 @Index('IDX_game_winner', ['winner'])
 @Index('IDX_game_end_time', ['endTime'])
+@Check('CHK_game_duration', '"duration" >= 1')
+@Check('CHK_game_team1_score', '"team1Score" IS NULL OR "team1Score" >= 0')
+@Check('CHK_game_team2_score', '"team2Score" IS NULL OR "team2Score" >= 0')
+@Check('CHK_game_winner_val', '"winner" IS NULL OR "winner" IN (1, 2)')
 export class Game extends Common {
   @Column({ type: "timestamptz", nullable: true })
   startTime: Date | null;
@@ -32,6 +36,7 @@ export class Game extends Common {
   participants: User[];
 
   @Column({ type: "bool", default: false })
+  @Index('IDX_game_is_cancelled')
   isCancelled: boolean;
 
   @Column({
@@ -52,7 +57,7 @@ export class Game extends Common {
   @Index('IDX_game_team1_division_id')
   team1Division: Division | null; // FK column team1DivisionId indexed for division history queries
 
-  @ManyToMany(() => User, { cascade: true })
+  @ManyToMany(() => User)
   @JoinTable({
     name: "game_team1_members",
     joinColumn: { name: "game_id", referencedColumnName: "id" },
@@ -71,7 +76,7 @@ export class Game extends Common {
   @Index('IDX_game_team2_division_id')
   team2Division: Division | null; // FK column team2DivisionId indexed for division history queries
 
-  @ManyToMany(() => User, { cascade: true })
+  @ManyToMany(() => User)
   @JoinTable({
     name: "game_team2_members",
     joinColumn: { name: "game_id", referencedColumnName: "id" },

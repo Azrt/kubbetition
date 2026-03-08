@@ -12,6 +12,7 @@ import { PostType } from '../enums/post-type.enum';
 export class CreatePostDto {
   @ApiProperty({ description: 'Post body content' })
   @IsString()
+  @MaxLength(10000)
   body: string;
 
   @ApiPropertyOptional({

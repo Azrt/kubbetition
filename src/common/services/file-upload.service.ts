@@ -5,6 +5,8 @@ import * as path from 'path';
 import * as sharp from 'sharp';
 import * as crypto from 'crypto';
 import * as net from 'net';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export enum FileType {
   USER_AVATAR = 'user',
@@ -167,29 +169,13 @@ export class FileUploadService {
     return `${baseName}.${fileHash}.${fileExtension}`;
   }
 
-  /**
-   * Get S3 client instance
-   * Configured to use AWS Signature Version 4 (required for all S3 buckets)
-   * Explicitly sets the region to match the bucket region
-   */
-  private getS3Client() {
-    const AWS = require('aws-sdk');
-    
-    // Ensure the region is explicitly set (required for presigned URLs)
-    const region = this.s3Config!.region;
-    
-    // Configure global AWS settings to use the correct region
-    AWS.config.update({
-      region: region,
-      signatureVersion: 'v4',
-    });
-    
-    return new AWS.S3({
-      region: region, // Explicitly set region for this client
-      accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-      secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
-      signatureVersion: 'v4', // Force AWS Signature Version 4
-      useAccelerateEndpoint: false,
+  private getS3Client(): S3Client {
+    return new S3Client({
+      region: this.s3Config!.region,
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID')!,
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY')!,
+      },
     });
   }
 
@@ -328,7 +314,6 @@ export class FileUploadService {
     format: string,
     isPrivate: boolean,
   ): Promise<string> {
-    // Build key with prefix: /{fileType}/{entityId}/{filename}
     const key = `${fileType}/${entityId}/${filename}`;
     const contentType = `image/${format === 'jpeg' ? 'jpeg' : format}`;
     const bucketName = this.getBucketName(fileType);
@@ -336,22 +321,16 @@ export class FileUploadService {
     try {
       const s3 = this.getS3Client();
 
-      const uploadParams: any = {
+      await s3.send(new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
         Body: buffer,
         ContentType: contentType,
-      };
+      }));
 
-
-      await s3.upload(uploadParams).promise();
-
-      // Return path string that can be easily used by frontend
-      // Format: s3://{bucket}/{key} or just {key} for easier parsing
-      // We'll use the key format: {fileType}/{entityId}/{filename}
       return key;
     } catch (error) {
-      throw new BadRequestException(`Failed to upload file to S3 ${error.message}`);
+      throw new BadRequestException(`Failed to upload file to S3: ${error.message}`);
     }
   }
 
@@ -441,14 +420,11 @@ export class FileUploadService {
       const bucketName = this.getBucketName(fileType);
       const s3 = this.getS3Client();
 
-      await s3
-        .deleteObject({
-          Bucket: bucketName,
-          Key: filePath,
-        })
-        .promise();
+      await s3.send(new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: filePath,
+      }));
     } catch (error) {
-      // Log error but don't throw - file might not exist
       console.error('Failed to delete file from S3:', error);
     }
   }
@@ -499,14 +475,13 @@ export class FileUploadService {
       const bucketName = this.getBucketName(fileType);
       const s3 = this.getS3Client();
 
-      // Generate presigned URL from S3
-      const presignedUrl = s3.getSignedUrl('getObject', {
+      const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: filePath,
-        Expires: ttl,
       });
 
-      // If Cloudflare is configured and should be used, convert S3 URL to Cloudflare CDN URL
+      const presignedUrl = await getSignedUrl(s3, command, { expiresIn: ttl });
+
       if (shouldUseCloudflare && this.cloudflareConfig) {
         return this.convertToCloudflareUrl(presignedUrl, fileType);
       }

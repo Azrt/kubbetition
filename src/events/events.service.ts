@@ -1647,6 +1647,6 @@ export class EventsService {
       throw new ForbiddenException('Only the event creator can delete the event');
     }
 
-    await this.eventsRepository.delete({ id: eventId });
+    await this.eventsRepository.softDelete({ id: eventId });
   }
 }

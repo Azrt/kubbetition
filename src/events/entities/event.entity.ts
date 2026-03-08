@@ -3,13 +3,20 @@ import { GameType } from 'src/common/enums/gameType';
 import { Game } from 'src/games/entities/game.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
+  Check,
   Column,
+  DeleteDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
 } from 'typeorm';
 
 @Entity()
+@Index('IDX_event_start_time', ['startTime'])
+@Index('IDX_event_is_public', ['isPublic'])
+@Check('CHK_event_rounds', '"rounds" >= 1')
+@Check('CHK_event_current_round', '"currentRound" >= 0')
 export class Event extends Common {
   @Column({ length: 255 })
   name: string;
@@ -70,4 +77,7 @@ export class Event extends Common {
 
   @OneToMany(() => Game, (game) => game.event)
   games: Game[];
+
+  @DeleteDateColumn()
+  deletedAt: Date | null;
 }

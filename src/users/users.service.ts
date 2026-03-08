@@ -160,7 +160,7 @@ export class UsersService {
   }
 
   remove(id: string) {
-    return this.usersRepository.delete({ id });
+    return this.usersRepository.softDelete({ id });
   }
 
   async updateCurrentUserToken(id: string, params: UpdateUserTokenDto) {

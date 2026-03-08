@@ -51,6 +51,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
     })
   );
@@ -71,27 +72,29 @@ async function bootstrap() {
     ],
   });
 
-  const config = new DocumentBuilder()
-    .setTitle("Kubbetition")
-    .setDescription("Kubbetition API")
-    .setVersion("1.0")
-    .addBearerAuth(
-      {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "JWT",
-        in: "header",
-      },
-      SWAGGER_BEARER_TOKEN
-    )
-    .build();
+  if (configService.get('NODE_ENV') !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle("Kubbetition")
+      .setDescription("Kubbetition API")
+      .setVersion("1.0")
+      .addBearerAuth(
+        {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+          in: "header",
+        },
+        SWAGGER_BEARER_TOKEN
+      )
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("swagger", app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-  });
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup("swagger", app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+  }
 
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
