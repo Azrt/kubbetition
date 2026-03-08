@@ -19,11 +19,15 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { StartRoundDto } from './dto/start-round.dto';
 import { Event } from './entities/event.entity';
 import { Game } from 'src/games/entities/game.entity';
+import { SimpleGameDto } from 'src/games/dto/simple-game.dto';
 import { RequestWithUser } from 'src/auth/interfaces/requestWithUser.interface';
 import { JoinEventDto } from './dto/join-event.dto';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { TeamRankingEntryDto } from './dto/ranking-response.dto';
+import { EventDetailDto } from './dto/event-detail.dto';
+import { SimpleEventDto } from './dto/simple-event.dto';
+import { SimpleUserDto } from 'src/common/dto/simple-user.dto';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { SendInvitationDto } from './dto/send-invitation.dto';
 import { EventInvitation } from './entities/event-invitation.entity';
@@ -75,7 +79,7 @@ export class EventsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all events (includes presigned imageUrl and participant info for each event). By default returns only future events and events from today. Participant info (firstName, lastName, teamName, avatarUrl) is returned for public events to all users.' })
+  @ApiOperation({ summary: 'Get all events (summary fields only: id, name, imageUrl, participantsCount, gameType, location, startTime, joiningTime). By default returns only future events and events from today.' })
   @ApiQuery({
     name: 'showArchived',
     required: false,
@@ -84,13 +88,13 @@ export class EventsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'List of events with presigned image URLs and participant information',
-    type: [Event],
+    description: 'List of events (summary view)',
+    type: [SimpleEventDto],
   })
   async findAll(
     @Query('showArchived') showArchived?: string,
     @Request() req?: RequestWithUser,
-  ): Promise<Array<Event & { imageUrl: string | null; participantsInfo: Array<Array<any>> | null }>> {
+  ): Promise<SimpleEventDto[]> {
     // Convert string to boolean (query params come as strings)
     const includeArchived = showArchived === 'true';
     return this.eventsService.findAllVisible(req.user, includeArchived);
@@ -137,18 +141,18 @@ export class EventsController {
   }
 
   @Get(':id/games/active')
-  @ApiOperation({ summary: 'Get active games of an event' })
+  @ApiOperation({ summary: 'Get active games of an event (simple game details, team members as simple user)' })
   @ApiResponse({
     status: 200,
-    description: 'List of active games',
-    type: [Game],
+    description: 'List of active games with reduced details (id, scores, ready flags, team members as simple user)',
+    type: [SimpleGameDto],
   })
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getActiveGames(
     @Param('id') eventId: string,
     @Request() req: RequestWithUser,
-  ): Promise<Game[]> {
+  ): Promise<SimpleGameDto[]> {
     return this.eventsService.getActiveGames(eventId, req.user);
   }
 
@@ -171,18 +175,34 @@ export class EventsController {
     return this.eventsService.getStatus(eventId, req?.user);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get event by ID (includes presigned imageUrl and participant info)' })
+  @Get(':id/participants')
+  @ApiOperation({ summary: 'Get event participants as array of teams (each team is an array of simple user data)' })
   @ApiResponse({
     status: 200,
-    description: 'Event details with presigned image URL and participant information',
-    type: Event,
+    description: 'Array of teams, each team an array of simple user DTOs (id, email, firstName, lastName, image, country)',
+    schema: { type: 'array', items: { type: 'array', items: { $ref: '#/components/schemas/SimpleUserDto' } } },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getParticipants(
+    @Param('id') eventId: string,
+    @Request() req: RequestWithUser,
+  ): Promise<SimpleUserDto[][]> {
+    return this.eventsService.getEventParticipants(eventId, req.user);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get event by ID (excludes participants, participantsInfo, games; createdBy is simple user)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Event details with presigned image URL; createdBy as simple user',
+    type: EventDetailDto,
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(
     @Param('id') id: string,
     @Request() req: RequestWithUser,
-  ): Promise<Event & { imageUrl: string | null; participantsInfo: Array<Array<any>> | null }> {
+  ): Promise<EventDetailDto> {
     return this.eventsService.findOneVisible(id, req.user);
   }
 

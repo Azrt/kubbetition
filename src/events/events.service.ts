@@ -9,6 +9,7 @@ import { Repository, In } from 'typeorm';
 import { Event as EventEntity } from './entities/event.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Game } from 'src/games/entities/game.entity';
+import { SimpleGameDto, toSimpleGame } from 'src/games/dto/simple-game.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { StartRoundDto } from './dto/start-round.dto';
 import { GameType } from 'src/common/enums/gameType';
@@ -19,6 +20,9 @@ import { FriendRequestStatus } from 'src/users/enums/friend-request-status.enum'
 import { EventInvitation } from './entities/event-invitation.entity';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { ParticipantInfoDto } from './dto/participant-info.dto';
+import { EventDetailDto, toEventDetail } from './dto/event-detail.dto';
+import { SimpleEventDto, toSimpleEvent } from './dto/simple-event.dto';
+import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
 import { DivisionsService } from 'src/teams/divisions/divisions.service';
 
 /** Event participant entry: legacy string[] or object with userIds and optional division info (for round games) */
@@ -1064,29 +1068,63 @@ export class EventsService {
     return event;
   }
 
-  async findOneVisible(
-    id: string,
-    currentUser: User,
-  ): Promise<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }> {
+  async findOneVisible(id: string, currentUser: User): Promise<EventDetailDto> {
     const event = await this.findOne(id);
 
     if (!(await this.canViewEvent(event, currentUser))) {
       throw new ForbiddenException('You are not allowed to access this event');
     }
 
-    // Add presigned URL for event image
     const eventWithImage = await this.addImageUrl(event);
+    return toEventDetail(eventWithImage, eventWithImage.imageUrl ?? null);
+  }
 
-    // Add participant details (only for public events to all users, or authorized users for private events)
-    const participantsInfo = await this.transformParticipants(event, currentUser);
+  /**
+   * Get event participants as array of teams, each team an array of simple user DTOs.
+   * Access: same as viewing the event (public or authorized for private).
+   */
+  async getEventParticipants(
+    eventId: string,
+    currentUser: User,
+  ): Promise<SimpleUserDto[][]> {
+    const event = await this.findOne(eventId);
 
-    return { ...eventWithImage, participantsInfo };
+    if (!(await this.canViewEvent(event, currentUser))) {
+      throw new ForbiddenException('You are not allowed to access this event');
+    }
+
+    if (!event.participants || event.participants.length === 0) {
+      return [];
+    }
+
+    const allParticipantIds = [...new Set(event.participants.flatMap(getParticipantUserIds))];
+    const users = await this.usersRepository.find({
+      where: { id: In(allParticipantIds) },
+    });
+    const userMap = new Map(users.map((p) => [p.id, p]));
+
+    return event.participants.map((entry) =>
+      getParticipantUserIds(entry).map((userId) => {
+        const user = userMap.get(userId);
+        if (!user) {
+          return {
+            id: userId,
+            email: '',
+            firstName: 'Unknown',
+            lastName: 'User',
+            image: null,
+            country: null,
+          };
+        }
+        return toSimpleUser(user);
+      }),
+    );
   }
 
   async findAllVisible(
     currentUser: User,
     showArchived: boolean = false,
-  ): Promise<Array<EventEntity & { imageUrl: string | null; participantsInfo: Array<Array<ParticipantInfoDto>> | null }>> {
+  ): Promise<SimpleEventDto[]> {
     let events: EventEntity[];
     
     // Get start of today (midnight) for date filtering
@@ -1139,15 +1177,9 @@ export class EventsService {
     // Add presigned URLs for all events in parallel
     const eventsWithImages = await this.addImageUrls(events);
 
-    // Add participant details for all events in parallel
-    const eventsWithParticipants = await Promise.all(
-      eventsWithImages.map(async (event) => {
-        const participantsInfo = await this.transformParticipants(event, currentUser);
-        return { ...event, participantsInfo };
-      }),
+    return eventsWithImages.map((event) =>
+      toSimpleEvent(event, event.imageUrl ?? null),
     );
-
-    return eventsWithParticipants;
   }
 
   async endRound(eventId: string, currentUser: User): Promise<Game[]> {
@@ -1232,7 +1264,7 @@ export class EventsService {
     );
   }
 
-  async getActiveGames(eventId: string, currentUser: User): Promise<Game[]> {
+  async getActiveGames(eventId: string, currentUser: User): Promise<SimpleGameDto[]> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       relations: ['createdBy', 'games', 'games.team1Members', 'games.team2Members'],
@@ -1242,20 +1274,18 @@ export class EventsService {
       throw new NotFoundException(`Event with ID ${eventId} not found`);
     }
 
-    // Check visibility
     if (!(await this.canViewEvent(event, currentUser))) {
       throw new ForbiddenException('You are not allowed to access this event');
     }
 
-    // Active games are games from the current round that haven't ended (endTime is null)
     const activeGames = (event.games || []).filter(
-      (game) => 
-        game.round === event.currentRound && 
-        !game.isCancelled && 
+      (game) =>
+        game.round === event.currentRound &&
+        !game.isCancelled &&
         game.endTime === null,
     );
 
-    return activeGames;
+    return activeGames.map(toSimpleGame);
   }
 
   async getStatus(
