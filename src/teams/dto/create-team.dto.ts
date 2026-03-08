@@ -1,11 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, Validate } from 'class-validator';
+import { IsOptional, IsString, Validate } from 'class-validator';
 import { CountryExistsRule } from 'src/common/validators/country-exists.rule';
 
 export class CreateTeamDto {
-  @ApiProperty({ readOnly: true })
-  readonly id: string;
-
   @ApiProperty()
   @IsString()
   name: string;
@@ -13,11 +10,6 @@ export class CreateTeamDto {
   @ApiProperty()
   @IsOptional()
   logo: string;
-
-  @ApiProperty()
-  @IsBoolean()
-  @IsOptional()
-  isActive: boolean;
 
   @ApiProperty()
   @IsString()

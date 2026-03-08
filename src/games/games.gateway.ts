@@ -14,7 +14,9 @@ interface ExtendedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: "*",
+    origin: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+      : false,
   },
   namespace: "games",
 })

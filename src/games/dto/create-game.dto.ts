@@ -6,9 +6,6 @@ import { ParticipantsAreFriendsOrTeamMembersRule } from "../validation/participa
 import { ContextAwareDto } from "src/common/dto/context-aware.dto";
 
 export class CreateGameDto extends ContextAwareDto {
-  @ApiProperty({ readOnly: true })
-  readonly id: string;
-
   @ApiProperty({ description: 'Game type determining team size (1v1, 2v2, 3v3, 4v4, 6v6)' })
   @IsEnum(GameType)
   type: GameType;

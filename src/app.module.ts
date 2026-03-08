@@ -14,8 +14,6 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 
 import { MulterModule } from '@nestjs/platform-express';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { TeamsModule } from './teams/teams.module';
 import { DatabaseModule } from './common/modules/database.module';
 import { GamesModule } from './games/games.module';
@@ -30,9 +28,6 @@ import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, "..", "uploads"),
-    }),
     MulterModule.register({
       dest: "./uploads",
       preservePath: true,

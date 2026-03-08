@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as sharp from 'sharp';
 import * as crypto from 'crypto';
+import * as net from 'net';
 
 export enum FileType {
   USER_AVATAR = 'user',
@@ -35,6 +36,16 @@ export class FileUploadService {
 
   // Allowed MIME types for image uploads
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+
+  // Allowed domains for external URL fetching (SSRF protection)
+  private readonly ALLOWED_URL_DOMAINS = [
+    'lh3.googleusercontent.com',
+    'lh4.googleusercontent.com',
+    'lh5.googleusercontent.com',
+    'lh6.googleusercontent.com',
+    'googleusercontent.com',
+    'googleapis.com',
+  ];
 
   // Mapping of file types to their base filenames
   private readonly FILE_TYPE_BASE_NAMES: Record<FileType, string> = {
@@ -193,10 +204,32 @@ export class FileUploadService {
     return isPrivate ? this.s3Config.privateBucket : this.s3Config.publicBucket;
   }
 
-  /**
-   * Upload an image from a URL (e.g., Google avatar)
-   * Downloads the image, processes it, and uploads to S3 or local storage
-   */
+  private validateExternalUrl(url: string): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new BadRequestException('Invalid image URL');
+    }
+
+    if (parsed.protocol !== 'https:') {
+      throw new BadRequestException('Only HTTPS URLs are allowed');
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (net.isIP(hostname)) {
+      throw new BadRequestException('IP addresses are not allowed in image URLs');
+    }
+
+    const isDomainAllowed = this.ALLOWED_URL_DOMAINS.some(
+      domain => hostname === domain || hostname.endsWith(`.${domain}`),
+    );
+    if (!isDomainAllowed) {
+      throw new BadRequestException('Image URL domain is not allowed');
+    }
+  }
+
   async uploadFromUrl(
     imageUrl: string,
     fileType: FileType,
@@ -211,8 +244,9 @@ export class FileUploadService {
       throw new BadRequestException('No image URL provided');
     }
 
+    this.validateExternalUrl(imageUrl);
+
     try {
-      // Download image from URL
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new BadRequestException(`Failed to download image from URL: ${response.statusText}`);

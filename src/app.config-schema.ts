@@ -43,6 +43,8 @@ export const configValidationSchema = Joi.object({
   // Optional Cloudflare CDN configuration
   CLOUDFLARE_PUBLIC_CDN_URL: Joi.string().uri().optional(),
   CLOUDFLARE_PRIVATE_CDN_URL: Joi.string().uri().optional(),
+  // Optional CORS allowed origins (comma-separated). Defaults to none (rejects browser cross-origin requests).
+  CORS_ALLOWED_ORIGINS: Joi.string().optional(),
   // Optional rate limiting (defaults: 20/1s, 100/10s, 300/60s)
   THROTTLE_SHORT_LIMIT: Joi.number().optional(),
   THROTTLE_SHORT_TTL_MS: Joi.number().optional(),

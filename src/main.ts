@@ -7,6 +7,7 @@ import {
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { QueryFailedExceptionFilter } from './common/filters/query-failed-exception.filter';
 import { useContainer } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -31,9 +32,15 @@ async function bootstrap() {
     // Continue with app startup even if seeding fails
   }
 
+  const configService = app.get(ConfigService);
+  const allowedOriginsRaw = configService.get<string>('CORS_ALLOWED_ORIGINS');
+  const allowedOrigins = allowedOriginsRaw
+    ? allowedOriginsRaw.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+
   app.enableCors({
     allowedHeaders: ["content-type", "authorization"],
-    origin: true, // Allow all origins for mobile apps
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
   });
 

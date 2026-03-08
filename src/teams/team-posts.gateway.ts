@@ -24,7 +24,11 @@ interface ExtendedSocket extends Socket {
 }
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+      : false,
+  },
   namespace: 'team-posts',
 })
 export class TeamPostsGateway
