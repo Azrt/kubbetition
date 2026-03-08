@@ -27,6 +27,8 @@ import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
 import { FriendRequestParamDto } from './dto/friend-request-param.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 import { SearchUserResponseDto } from './dto/search-user-response.dto';
+import { SimpleUserDto } from 'src/common/dto/simple-user.dto';
+import { FriendRequestListItemDto } from './dto/friend-request-list-item.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/role.enum';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
@@ -64,16 +66,19 @@ export class UsersController {
   }
 
   @Get("friends")
+  @ApiResponse({ status: 200, description: 'List of friends.', type: [SimpleUserDto] })
   getFriends(@CurrentUser() user: User) {
     return this.usersService.getFriends(user);
   }
 
   @Get("friends/requests/received")
+  @ApiResponse({ status: 200, description: 'Received friend requests.', type: [FriendRequestListItemDto] })
   getReceivedFriendRequests(@CurrentUser() user: User) {
     return this.usersService.getReceivedFriendRequests(user);
   }
 
   @Get("friends/requests/sent")
+  @ApiResponse({ status: 200, description: 'Sent friend requests.', type: [FriendRequestListItemDto] })
   getSentFriendRequests(@CurrentUser() user: User) {
     return this.usersService.getSentFriendRequests(user);
   }

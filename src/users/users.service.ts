@@ -13,7 +13,8 @@ import { MobileTokenResponse } from './types/mobile-token-response.type';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { USERS_PAGINATION_CONFIG } from './users.constants';
 import { SearchUserResponseDto } from './dto/search-user-response.dto';
-import { toSimpleUser } from 'src/common/dto/simple-user.dto';
+import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
+import { FriendRequestListItemDto } from './dto/friend-request-list-item.dto';
 
 @Injectable()
 export class UsersService {
@@ -226,7 +227,7 @@ export class UsersService {
     return this.friendRequestsRepository.save(friendRequest);
   }
 
-  async getFriends(user: User) {
+  async getFriends(user: User): Promise<SimpleUserDto[]> {
     const friendRequests = await this.friendRequestsRepository.find({
       where: [
         {
@@ -252,7 +253,7 @@ export class UsersService {
       friendsById.set(friend.id, friend);
     });
 
-    return Array.from(friendsById.values());
+    return Array.from(friendsById.values()).map(toSimpleUser);
   }
 
   async acceptFriendRequest(id: string, user: User) {
@@ -301,24 +302,42 @@ export class UsersService {
     return this.friendRequestsRepository.save(updatedFriendRequest);
   }
 
-  async getReceivedFriendRequests(user: User) {
-    return this.friendRequestsRepository.find({
+  async getReceivedFriendRequests(user: User): Promise<FriendRequestListItemDto[]> {
+    const requests = await this.friendRequestsRepository.find({
       where: {
         recipient: { id: user.id },
         status: FriendRequestStatus.IN_PROGRESS,
       },
       relations: ['requester', 'recipient'],
     });
+    return requests.map((fr) => ({
+      id: fr.id,
+      createdAt: fr.createdAt,
+      updatedAt: fr.updatedAt,
+      message: fr.message ?? null,
+      status: fr.status,
+      requester: toSimpleUser(fr.requester),
+      recipient: toSimpleUser(fr.recipient),
+    }));
   }
 
-  async getSentFriendRequests(user: User) {
-    return this.friendRequestsRepository.find({
+  async getSentFriendRequests(user: User): Promise<FriendRequestListItemDto[]> {
+    const requests = await this.friendRequestsRepository.find({
       where: {
         requester: { id: user.id },
         status: FriendRequestStatus.IN_PROGRESS,
       },
       relations: ['requester', 'recipient'],
     });
+    return requests.map((fr) => ({
+      id: fr.id,
+      createdAt: fr.createdAt,
+      updatedAt: fr.updatedAt,
+      message: fr.message ?? null,
+      status: fr.status,
+      requester: toSimpleUser(fr.requester),
+      recipient: toSimpleUser(fr.recipient),
+    }));
   }
 
   async deleteFriendRequest(id: string, user: User) {
