@@ -10,6 +10,9 @@ import { In, Repository } from 'typeorm';
 import { TeamsService } from 'src/teams/teams.service';
 import { UpdateUserTokenDto } from './dto/update-user-token.dto';
 import { MobileTokenResponse } from './types/mobile-token-response.type';
+import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
+import { USERS_PAGINATION_CONFIG } from './users.constants';
+import { SearchUserResponseDto } from './dto/search-user-response.dto';
 
 @Injectable()
 export class UsersService {
@@ -25,8 +28,8 @@ export class UsersService {
     return this.usersRepository.save(createUserDto);
   }
 
-  findAll() {
-    return this.usersRepository.find({ relations: ['team'] });
+  findAll(query: PaginateQuery): Promise<Paginated<User>> {
+    return paginate(query, this.usersRepository, USERS_PAGINATION_CONFIG);
   }
 
   async search(
@@ -35,7 +38,7 @@ export class UsersService {
     teamName?: string,
     excludeWithFriendRequest?: boolean,
     currentUser?: User
-  ) {
+  ): Promise<SearchUserResponseDto[]> {
     // Return empty array if no search params provided
     if (!email && !lastName && teamName === undefined) {
       return [];
@@ -78,9 +81,20 @@ export class UsersService {
       }
     }
 
-    const take = teamName && !email && !lastName ? undefined : 10;
+    const take = 5;
 
-    return queryBuilder.take(take).getMany();
+    const users = await queryBuilder.take(take).getMany();
+    return users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      image: user.image ?? null,
+      country: user.country ?? null,
+      team: user.team
+        ? { id: user.team.id, name: user.team.name }
+        : null,
+    }));
   }
 
   findOne(id: string) {

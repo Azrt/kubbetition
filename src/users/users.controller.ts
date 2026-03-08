@@ -14,7 +14,7 @@ import {
 import { UsersService } from './users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
@@ -26,6 +26,11 @@ import { User } from './entities/user.entity';
 import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
 import { FriendRequestParamDto } from './dto/friend-request-param.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
+import { SearchUserResponseDto } from './dto/search-user-response.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/role.enum';
+import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
+import { USERS_PAGINATION_CONFIG } from './users.constants';
 
 @ApiTags('users')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -37,15 +42,18 @@ export class UsersController {
   ) {}
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @PaginatedSwaggerDocs(User, USERS_PAGINATION_CONFIG)
+  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<User>> {
+    return this.usersService.findAll(query);
   }
 
   @Get("search")
+  @ApiResponse({ status: 200, description: 'List of users with limited fields.', type: [SearchUserResponseDto] })
   search(
     @Query() searchParams: SearchUsersDto,
     @CurrentUser() user: User
-  ) {
+  ): Promise<SearchUserResponseDto[]> {
     return this.usersService.search(
       searchParams.email,
       searchParams.lastName,
