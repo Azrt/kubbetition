@@ -6,6 +6,7 @@ import { DataSource, Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
 import { UpdateTeamMembersDto } from "./dto/update-team.dto";
+import { toTeamMember } from './dto/team-member.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/common/enums/role.enum';
 import { GameType } from 'src/common/enums/gameType';
@@ -63,15 +64,17 @@ export class TeamsService {
     }
   }
 
-  getMyTeam(user: User) {
+  async getMyTeam(user: User) {
     if (!user.team?.id) {
       return null;
     }
-    
-    return this.teamsRepository.findOne({
+
+    const team = await this.teamsRepository.findOne({
       relations: ["members"],
       where: { id: user.team.id },
     });
+    if (!team) return null;
+    return { ...team, members: (team.members ?? []).map(toTeamMember) };
   }
 
   findAll(query: PaginateQuery, options?: { includeInactive?: boolean }) {
@@ -101,11 +104,13 @@ export class TeamsService {
     });
   }
 
-  findOne(id: string) {
-    return this.teamsRepository.findOne({
+  async findOne(id: string) {
+    const team = await this.teamsRepository.findOne({
       relations: ["members"],
       where: { id },
     });
+    if (!team) return null;
+    return { ...team, members: (team.members ?? []).map(toTeamMember) };
   }
 
   async update(id: string, updateTeamDto: UpdateTeamMembersDto) {
