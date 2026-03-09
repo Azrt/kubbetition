@@ -26,4 +26,5 @@ USER node
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+# Run migrations then start the app (migrations run first so DB is ready before accepting traffic)
+CMD ["sh", "-c", "node node_modules/typeorm/cli.js migration:run -d dist/data-source.js && exec node dist/main"]

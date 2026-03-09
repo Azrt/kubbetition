@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'path';
 import { User } from '../../users/entities/user.entity';
 import { Team } from '../../teams/entities/team.entity';
 import { Game } from "../../games/entities/game.entity";
@@ -21,7 +22,9 @@ import { Event } from '../../events/entities/event.entity';
           password: configService.get("POSTGRES_PASSWORD"),
           database: configService.get("POSTGRES_DB"),
           entities: [User, Team, Game, Event],
-          synchronize: !isProduction,
+          migrations: [join(__dirname, '..', '..', 'migrations', '*.js')],
+          migrationsRun: true,
+          synchronize: false,
           logging: !isProduction,
           autoLoadEntities: true,
         };
