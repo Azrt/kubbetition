@@ -58,7 +58,7 @@ export class AuthController {
       const tokens = await this.authService.generateTokens(user);
 
       const data = {
-        user,
+        user: { ...user, role: user.role },
         ...tokens,
       };
 
@@ -95,6 +95,7 @@ export class AuthController {
 
   @Get("me")
   async currentUserData(@CurrentUser() user: User) {
-    return this.authService.getCurrentUser(user);
+    const me = await this.authService.getCurrentUser(user);
+    return { ...me, role: me.role };
   }
 }
