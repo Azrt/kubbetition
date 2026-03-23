@@ -451,7 +451,9 @@ export class GamesService implements GamesServiceInterface {
     const games = await this.gamesRepository.find({
       relations: GAME_RELATIONS,
       where: [
-        { endTime: IsNull(), participants: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, participants: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, team1Members: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, team2Members: { id: user?.id } },
       ],
     });
 
