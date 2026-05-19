@@ -27,6 +27,11 @@ import { GamesSummaryResponseDto } from './dto/summary-response.dto';
 import { ApiQuery } from '@nestjs/swagger';
 import { DivisionStatsDto } from 'src/teams/divisions/dto/division-stats.dto';
 
+const API_GAME_ID_PATH_PARAM = {
+  name: 'gameId',
+  schema: { type: 'string' as const, format: 'uuid' as const },
+};
+
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
@@ -146,6 +151,7 @@ export class GamesController {
   }
 
   @Get(":gameId")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(NotFoundInterceptor)
   findOne(
     @Param("gameId") gameId: string,
@@ -155,6 +161,7 @@ export class GamesController {
   }
 
   @Patch(":gameId")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(BodyContextInterceptor)
   async update(
     @Param("gameId") gameId: string,
@@ -169,6 +176,7 @@ export class GamesController {
   }
 
   @Delete(":gameId")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async remove(
     @Param("gameId") gameId: string,
     @CurrentUser() currentUser: User,
@@ -185,6 +193,7 @@ export class GamesController {
   }
 
   @Patch(":gameId/end")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async end(
     @Param() params: EndGameDto,
     @CurrentUser() currentUser: User,
@@ -208,6 +217,7 @@ export class GamesController {
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/cancel")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async cancel(@Param() params: CancelGameDto) {
     const game = await this.gamesService.cancelGame(params.gameId);
 
@@ -218,10 +228,7 @@ export class GamesController {
 
   // Team operations
   @UseInterceptors(ParamContextInterceptor)
-  @ApiParam({
-    name: 'gameId',
-    type: 'integer',
-  })
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @ApiParam({
     name: 'team',
     type: 'integer',
@@ -244,6 +251,7 @@ export class GamesController {
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/leave")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async leaveTeam(
     @Param("gameId") gameId: string,
     @CurrentUser() user: User
@@ -256,10 +264,7 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor)
-  @ApiParam({
-    name: 'gameId',
-    type: 'integer',
-  })
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @ApiParam({
     name: 'team',
     type: 'integer',
@@ -281,10 +286,7 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
-  @ApiParam({
-    name: 'gameId',
-    type: 'integer',
-  })
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @ApiParam({
     name: 'team',
     type: 'integer',
@@ -308,6 +310,7 @@ export class GamesController {
   }
 
   @Post(":gameId/social-photo")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(FileInterceptor("file"))
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
   async uploadSocialPhoto(
@@ -348,6 +351,7 @@ export class GamesController {
   }
 
   @Get(":gameId/social-photo")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
   async getSocialPhotoUrl(
     @Param("gameId") gameId: string,

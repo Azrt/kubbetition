@@ -3,6 +3,7 @@ import { IsIn, IsInt, IsUUID, Max, Min } from 'class-validator';
 import { ContextAwareDto } from 'src/common/dto/context-aware.dto';
 
 export class UpdateTeamScoreParamsDto extends ContextAwareDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID()
   gameId: string;
 
