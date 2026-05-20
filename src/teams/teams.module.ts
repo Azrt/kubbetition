@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -34,7 +34,7 @@ import { DivisionsService } from './divisions/divisions.service';
         },
       }),
     }),
-    UsersModule,
+    forwardRef(() => UsersModule),
   ],
   controllers: [TeamsController, PostsController, DivisionsController],
   providers: [TeamsService, PostsService, DivisionsService, CountriesService, CountryExistsRule, SameTeamGuard, TeamPostsGateway],

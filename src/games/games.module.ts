@@ -29,7 +29,7 @@ import { GamesSchedulerService } from './games-scheduler.service';
     TypeOrmModule.forFeature([Game, User, Team, FriendRequest]),
     forwardRef(() => AuthModule),
     FileUploadModule,
-    TeamsModule,
+    forwardRef(() => TeamsModule),
   ],
   controllers: [GamesController],
   providers: [

@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, forwardRef } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,7 +24,7 @@ import { GamesModule } from 'src/games/games.module';
     TypeOrmModule.forFeature([User, Team, FriendRequest]),
     FileUploadModule,
     RedisModule,
-    GamesModule,
+    forwardRef(() => GamesModule),
   ],
   controllers: [UsersController],
   providers: [
