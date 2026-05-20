@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { isAdminRole } from 'src/common/helpers/user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -225,6 +226,37 @@ export class UsersService {
     });
 
     return this.friendRequestsRepository.save(friendRequest);
+  }
+
+  /**
+   * Whether the viewer may access another user's game history
+   * (self, admin, accepted friend, or same team).
+   */
+  async canViewUserGameHistory(viewer: User, targetUserId: string): Promise<boolean> {
+    if (viewer.id === targetUserId) {
+      return true;
+    }
+
+    if (isAdminRole(viewer)) {
+      return true;
+    }
+
+    const friends = await this.getFriends(viewer);
+    if (friends.some((f) => f.id === targetUserId)) {
+      return true;
+    }
+
+    if (viewer.team?.id) {
+      const targetUser = await this.usersRepository.findOne({
+        where: { id: targetUserId },
+        relations: ['team'],
+      });
+      if (targetUser?.team?.id === viewer.team.id) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   async getFriends(user: User): Promise<SimpleUserDto[]> {

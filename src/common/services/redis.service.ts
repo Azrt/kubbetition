@@ -39,6 +39,20 @@ export class RedisService {
     return `game:history:${userId}:*`;
   }
 
+  static gamePublicHistoryPattern(userId: string): string {
+    return `game:public-history:${userId}:*`;
+  }
+
+  static gamePublicHistoryKey(
+    userId: string,
+    page?: number,
+    limit?: number,
+    includeCancelled?: boolean,
+    includeInProgress?: boolean,
+  ): string {
+    return `game:public-history:${userId}:${page ?? 1}:${limit ?? 10}:${includeCancelled ?? false}:${includeInProgress ?? false}`;
+  }
+
   static hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }

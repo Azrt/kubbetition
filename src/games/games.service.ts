@@ -515,6 +515,79 @@ export class GamesService implements GamesServiceInterface {
   }
 
   /**
+   * Finished (or optionally in-progress) games for a user, limited to public games
+   * (no event, or event.isPublic = true). Used by GET users/:userId/history.
+   */
+  async findUserPublicHistory(
+    userId: string,
+    query?: PaginateQuery,
+    includeCancelled = false,
+    includeInProgress = false,
+  ): Promise<Paginated<Game>> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
+    const cacheKey = RedisService.gamePublicHistoryKey(
+      userId,
+      page,
+      limit,
+      includeCancelled,
+      includeInProgress,
+    );
+
+    const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const queryBuilder = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
+      .leftJoin('game.event', 'event')
+      .addSelect(['event.id', 'event.name', 'event.gameType', 'event.isPublic'])
+      .andWhere(
+        '(team1Members.id = :userId OR team2Members.id = :userId)',
+        { userId },
+      )
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('event.id IS NULL').orWhere('event.isPublic = :isPublic', {
+            isPublic: true,
+          });
+        }),
+      )
+      .orderBy({ 'game.endTime': { order: 'DESC', nulls: 'NULLS LAST' } });
+
+    if (!includeInProgress) {
+      queryBuilder.andWhere('game.endTime IS NOT NULL');
+    }
+
+    if (!includeCancelled) {
+      queryBuilder.andWhere('game.isCancelled = :isCancelled', {
+        isCancelled: false,
+      });
+    }
+
+    const result = await paginate(query, queryBuilder, {
+      sortableColumns: ['id', 'endTime', 'startTime'],
+      defaultSortBy: [['endTime', 'DESC']],
+      maxLimit: 50,
+    });
+
+    result.data.forEach((game) => this.computeGameProperties(game));
+    result.data = result.data.map((g) => this.trimGameForList(g));
+
+    await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
+
+    return result;
+  }
+
+  /**
    * Returns history of games played by the current user against a specific group of opponents
    * (e.g. 3v3: the three people on the other team), with aggregate stats (wins, losses, draws, win rate).
    * Opponent group is matched by exact set: the other team must consist exactly of the given user IDs.
@@ -854,9 +927,10 @@ export class GamesService implements GamesServiceInterface {
     game.team2Members?.forEach(m => userIds.add(m.id));
 
     await Promise.all(
-      Array.from(userIds).map(userId =>
-        this.redisService.delByPattern(RedisService.gameHistoryPattern(userId))
-      )
+      Array.from(userIds).flatMap((userId) => [
+        this.redisService.delByPattern(RedisService.gameHistoryPattern(userId)),
+        this.redisService.delByPattern(RedisService.gamePublicHistoryPattern(userId)),
+      ]),
     );
   }
 

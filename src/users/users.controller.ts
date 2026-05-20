@@ -10,6 +10,7 @@ import {
   UploadedFile,
   Query,
   ForbiddenException,
+  NotFoundException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { isAdminRole } from 'src/common/helpers/user';
@@ -17,7 +18,7 @@ import { UsersService } from './users.service';
 import { AuthService } from 'src/auth/auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
@@ -36,6 +37,8 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/role.enum';
 import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
 import { USERS_PAGINATION_CONFIG } from './users.constants';
+import { GamesService } from 'src/games/games.service';
+import { Game } from 'src/games/entities/game.entity';
 
 @ApiTags('users')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -45,6 +48,7 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly fileUploadService: FileUploadService,
     private readonly authService: AuthService,
+    private readonly gamesService: GamesService,
   ) {}
 
   @Get()
@@ -125,6 +129,41 @@ export class UsersController {
     return this.usersService.deleteFriendRequest(
       params.friendRequestId,
       user
+    );
+  }
+
+  @Get(':userId/history')
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
+  async getUserHistory(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: User,
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
+  ): Promise<Paginated<Game>> {
+    const targetUser = await this.usersService.findOne(userId);
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const canView = await this.usersService.canViewUserGameHistory(
+      currentUser,
+      userId,
+    );
+    if (!canView) {
+      throw new ForbiddenException(
+        'You are not allowed to view this user\'s game history',
+      );
+    }
+
+    const includeCancelled = cancelled === 'true';
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserPublicHistory(
+      userId,
+      query,
+      includeCancelled,
+      includeInProgress,
     );
   }
 

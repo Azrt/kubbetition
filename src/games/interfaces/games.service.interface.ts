@@ -12,6 +12,7 @@ export interface GamesServiceInterface {
   cancelGame(id: string): Promise<Game>;
   findAllUserActive(user: User): Promise<Array<Game>>;
   findUserHistory(userId: string, query?: PaginateQuery, includeCancelled?: boolean, includeInProgress?: boolean): Promise<Paginated<Game>>;
+  findUserPublicHistory(userId: string, query?: PaginateQuery, includeCancelled?: boolean, includeInProgress?: boolean): Promise<Paginated<Game>>;
   findSummaryAgainstOpponents(
     currentUser: User,
     opponentIds: string[],
