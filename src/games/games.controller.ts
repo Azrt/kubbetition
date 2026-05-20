@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GamesService } from './games.service';
 import { CreateGameDto } from './dto/create-game.dto';
@@ -31,6 +31,12 @@ const API_GAME_ID_PATH_PARAM = {
   name: 'gameId',
   schema: { type: 'string' as const, format: 'uuid' as const },
 };
+
+const summaryQueryPipe = new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+});
 
 @ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -140,12 +146,27 @@ export class GamesController {
   @Get("summary")
   @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
   @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 4, 6], description: 'Filter by game type (1=1v1, 2=2v2, 3=3v3, 4=4v4, 6=6v6)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: 'integer',
+    description: 'Only include games that ended within the last N calendar days (including today). E.g. days=7 includes today and the previous 6 days.',
+    schema: { type: 'integer', minimum: 1, maximum: 365, example: 30 },
+  })
   async getSummary(
-    @Query() query: SummaryQueryDto,
     @CurrentUser() currentUser: User,
+    @Query('opponentIds') opponentIds: string | string[],
+    @Query('gameType') gameType?: string,
+    @Query('days') days?: string,
   ): Promise<GamesSummaryResponseDto> {
+    const query = await summaryQueryPipe.transform(
+      { opponentIds, gameType, days },
+      { type: 'query', metatype: SummaryQueryDto },
+    );
+
     return this.gamesService.findSummaryAgainstOpponents(currentUser, query.opponentIds, {
       gameType: query.gameType,
+      days: query.days,
       limit: 50,
     });
   }
@@ -363,18 +384,20 @@ export class GamesController {
       throw new NotFoundException('Game not found');
     }
 
+    // findOne nulls socialPhoto when the user lacks access, so a null value
+    // here means either "no photo exists" or "no access". Re-check access only
+    // on this sad path so the happy path stays a single DB lookup, while still
+    // returning a proper 403 for users who just don't have access.
     if (!game.socialPhoto) {
+      const hasAccess = await this.gamesService.canAccessGameSocialPhoto(gameId, user);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this social photo');
+      }
       throw new NotFoundException('Game does not have a social photo');
     }
 
-    // Check if user has access to the social photo
-    const hasAccess = await this.gamesService.canAccessGameSocialPhoto(gameId, user);
-    if (!hasAccess) {
-      throw new ForbiddenException('You do not have access to this social photo');
-    }
-
-    // Generate presigned URL with long TTL (1 year) since game photos don't change
-    // Cloudflare CDN will be used if configured
+    // Generate presigned URL with long TTL (1 year) since game photos don't change.
+    // Cloudflare CDN will be used if configured.
     // game.socialPhoto is stored as file path: game/{gameId}/social-photo.jpg
     const presignedUrl = await this.fileUploadService.getPresignedUrl(
       game.socialPhoto,

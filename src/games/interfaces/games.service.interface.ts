@@ -15,7 +15,7 @@ export interface GamesServiceInterface {
   findSummaryAgainstOpponents(
     currentUser: User,
     opponentIds: string[],
-    options?: { gameType?: number; limit?: number },
+    options?: { gameType?: number; days?: number; limit?: number },
   ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }>;
   joinTeam(gameId: string, team: 1 | 2, user: User): Promise<Game>;
   leaveTeam(gameId: string, user: User): Promise<Game>;

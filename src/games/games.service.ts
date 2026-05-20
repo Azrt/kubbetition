@@ -522,16 +522,23 @@ export class GamesService implements GamesServiceInterface {
   async findSummaryAgainstOpponents(
     currentUser: User,
     opponentIds: string[],
-    options?: { gameType?: number; limit?: number },
+    options?: { gameType?: number; days?: number; limit?: number },
   ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }> {
     const len = opponentIds.length;
     const limit = Math.min(options?.limit ?? 50, 100);
+    let since: Date | undefined;
+    if (options?.days != null) {
+      since = new Date();
+      since.setHours(0, 0, 0, 0);
+      since.setDate(since.getDate() - (options.days - 1));
+    }
     const params = {
       userId: currentUser.id,
       opponentIds,
       len,
       isCancelled: false,
       gameType: options?.gameType,
+      since,
     };
 
     const qb = this.gamesRepository
@@ -577,6 +584,10 @@ export class GamesService implements GamesServiceInterface {
 
     if (params.gameType != null) {
       qb.andWhere('game.type = :gameType', { gameType: params.gameType });
+    }
+
+    if (params.since != null) {
+      qb.andWhere('game.endTime >= :since', { since: params.since });
     }
 
     qb.setParameters({ userId: params.userId, opponentIds: params.opponentIds, len: params.len });
@@ -777,7 +788,7 @@ export class GamesService implements GamesServiceInterface {
 
   /**
    * Trims game entity to only fields needed for list responses (/games, /games/history).
-   * Game: id, isCancelled, type, duration, team1Score, team2Score, round, socialPhoto.
+   * Game: id, createdAt, startTime, endTime, isCancelled, type, duration, team1Score, team2Score, winner, round, socialPhoto.
    * Event: id, name, type (gameType). Members: id, firstName, lastName, image, team: { id, name }.
    * Divisions (optional): id, name.
    */
@@ -798,11 +809,15 @@ export class GamesService implements GamesServiceInterface {
 
     return {
       id: game.id,
+      createdAt: game.createdAt,
+      startTime: game.startTime,
+      endTime: game.endTime,
       isCancelled: game.isCancelled,
       type: game.type,
       duration: game.duration,
       team1Score: game.team1Score,
       team2Score: game.team2Score,
+      winner: game.winner,
       round: game.round,
       socialPhoto: game.socialPhoto,
       event: trimEvent(game.event) as unknown as Game['event'],
@@ -859,8 +874,13 @@ export class GamesService implements GamesServiceInterface {
       return true;
     }
 
-    const game = await this.findOne(gameId);
-    if (!game || !game.socialPhoto) {
+    // Load game directly (without going through findOne, which mutates socialPhoto
+    // based on access — that would cause this check to always return false).
+    const game = await this.gamesRepository.findOne({
+      where: { id: gameId },
+      relations: ['participants', 'team1Members', 'team1Members.team', 'team2Members', 'team2Members.team'],
+    });
+    if (!game) {
       return false;
     }
 

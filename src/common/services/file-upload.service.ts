@@ -33,8 +33,11 @@ export class FileUploadService {
   // File types that go to private bucket
   private readonly PRIVATE_FILE_TYPES = [FileType.EVENT_IMAGE, FileType.GAME_PHOTO];
   
-  // Long TTL for game photos (1 year in seconds) since they don't change
-  private readonly GAME_PHOTO_TTL = 31536000; // 365 * 24 * 60 * 60
+  // AWS SigV4 hard-caps presigned URL expiration at 7 days. We pick the max
+  // here so game photos (which don't change) get the longest possible signed
+  // URL; Cloudflare can still cache much longer via its own Cache-Control rules.
+  private readonly AWS_PRESIGN_MAX_TTL = 604800; // 7 * 24 * 60 * 60
+  private readonly GAME_PHOTO_TTL = this.AWS_PRESIGN_MAX_TTL;
 
   // Allowed MIME types for image uploads
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
@@ -466,8 +469,11 @@ export class FileUploadService {
     }
 
     // Use long TTL for game photos if not specified
-    const ttl = expiresIn ?? (fileType === FileType.GAME_PHOTO ? this.GAME_PHOTO_TTL : 3600);
-    
+    const requestedTtl = expiresIn ?? (fileType === FileType.GAME_PHOTO ? this.GAME_PHOTO_TTL : 3600);
+    // AWS SigV4 hard-caps presigned URL expiration at 7 days; clamp here so
+    // callers can't accidentally trigger a signing error.
+    const ttl = Math.min(requestedTtl, this.AWS_PRESIGN_MAX_TTL);
+
     // Use Cloudflare CDN if configured and requested (default true for game photos)
     const shouldUseCloudflare = useCloudflare ?? (fileType === FileType.GAME_PHOTO && this.cloudflareConfig !== null);
 
@@ -488,7 +494,10 @@ export class FileUploadService {
 
       return presignedUrl;
     } catch (error) {
-      throw new BadRequestException('Failed to generate presigned URL');
+      console.error('Failed to generate presigned URL', { filePath, fileType, ttl, error });
+      throw new BadRequestException(
+        `Failed to generate presigned URL: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
     }
   }
 

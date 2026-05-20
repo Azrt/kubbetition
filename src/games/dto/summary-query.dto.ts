@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { ArrayMinSize, IsArray, IsEnum, IsOptional, IsUUID } from "class-validator";
-import { Transform } from "class-transformer";
+import { ArrayMinSize, IsArray, IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from "class-validator";
+import { Transform, Type } from "class-transformer";
 import { GameType } from "src/common/enums/gameType";
 
 export class SummaryQueryDto {
@@ -26,7 +26,22 @@ export class SummaryQueryDto {
     enum: GameType,
   })
   @IsOptional()
-  @Transform(({ value }: { value: string }) => (value != null && value !== "" ? Number(value) : undefined))
+  @Type(() => Number)
   @IsEnum(GameType)
   gameType?: GameType;
+
+  @ApiPropertyOptional({
+    type: 'integer',
+    description:
+      "Only include games that ended within the last N calendar days (including today). E.g. days=7 returns games from the start of 6 days ago through now.",
+    example: 30,
+    minimum: 1,
+    maximum: 365,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  days?: number;
 }
