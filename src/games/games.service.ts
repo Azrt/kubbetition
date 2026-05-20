@@ -593,9 +593,9 @@ export class GamesService implements GamesServiceInterface {
    * Opponent group is matched by exact set: the other team must consist exactly of the given user IDs.
    */
   async findSummaryAgainstOpponents(
-    currentUser: User,
+    userId: string,
     opponentIds: string[],
-    options?: { gameType?: number; days?: number; limit?: number },
+    options?: { gameType?: number; days?: number; limit?: number; publicOnly?: boolean },
   ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }> {
     const len = opponentIds.length;
     const limit = Math.min(options?.limit ?? 50, 100);
@@ -606,7 +606,7 @@ export class GamesService implements GamesServiceInterface {
       since.setDate(since.getDate() - (options.days - 1));
     }
     const params = {
-      userId: currentUser.id,
+      userId,
       opponentIds,
       len,
       isCancelled: false,
@@ -623,7 +623,19 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
       .leftJoinAndSelect('game.event', 'event')
       .where('game.endTime IS NOT NULL')
-      .andWhere('game.isCancelled = :isCancelled', { isCancelled: params.isCancelled })
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: params.isCancelled });
+
+    if (options?.publicOnly) {
+      qb.andWhere(
+        new Brackets((sub) => {
+          sub.where('event.id IS NULL').orWhere('event.isPublic = :isPublic', {
+            isPublic: true,
+          });
+        }),
+      );
+    }
+
+    qb
       .andWhere(
         new Brackets((qb2) => {
           qb2
@@ -673,7 +685,7 @@ export class GamesService implements GamesServiceInterface {
     let losses = 0;
     let draws = 0;
     for (const g of games) {
-      const myTeam = g.team1Members?.some((m) => m.id === currentUser.id) ? 1 : 2;
+      const myTeam = g.team1Members?.some((m) => m.id === userId) ? 1 : 2;
       if (g.winner === null) draws++;
       else if (g.winner === myTeam) wins++;
       else losses++;

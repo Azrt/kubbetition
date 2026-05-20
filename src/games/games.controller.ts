@@ -164,7 +164,7 @@ export class GamesController {
       { type: 'query', metatype: SummaryQueryDto },
     );
 
-    return this.gamesService.findSummaryAgainstOpponents(currentUser, query.opponentIds, {
+    return this.gamesService.findSummaryAgainstOpponents(currentUser.id, query.opponentIds, {
       gameType: query.gameType,
       days: query.days,
       limit: 50,

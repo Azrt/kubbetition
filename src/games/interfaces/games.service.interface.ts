@@ -14,9 +14,9 @@ export interface GamesServiceInterface {
   findUserHistory(userId: string, query?: PaginateQuery, includeCancelled?: boolean, includeInProgress?: boolean): Promise<Paginated<Game>>;
   findUserPublicHistory(userId: string, query?: PaginateQuery, includeCancelled?: boolean, includeInProgress?: boolean): Promise<Paginated<Game>>;
   findSummaryAgainstOpponents(
-    currentUser: User,
+    userId: string,
     opponentIds: string[],
-    options?: { gameType?: number; days?: number; limit?: number },
+    options?: { gameType?: number; days?: number; limit?: number; publicOnly?: boolean },
   ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }>;
   joinTeam(gameId: string, team: 1 | 2, user: User): Promise<Game>;
   leaveTeam(gameId: string, user: User): Promise<Game>;

@@ -12,6 +12,7 @@ import {
   ForbiddenException,
   NotFoundException,
   ParseUUIDPipe,
+  ValidationPipe,
 } from '@nestjs/common';
 import { isAdminRole } from 'src/common/helpers/user';
 import { UsersService } from './users.service';
@@ -39,6 +40,14 @@ import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs
 import { USERS_PAGINATION_CONFIG } from './users.constants';
 import { GamesService } from 'src/games/games.service';
 import { Game } from 'src/games/entities/game.entity';
+import { SummaryQueryDto } from 'src/games/dto/summary-query.dto';
+import { GamesSummaryResponseDto } from 'src/games/dto/summary-response.dto';
+
+const summaryQueryPipe = new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+});
 
 @ApiTags('users')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -130,6 +139,51 @@ export class UsersController {
       params.friendRequestId,
       user
     );
+  }
+
+  @Get(':userId/summary')
+  @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
+  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 4, 6], description: 'Filter by game type (1=1v1, 2=2v2, 3=3v3, 4=4v4, 6=6v6)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: 'integer',
+    description: 'Only include games that ended within the last N calendar days (including today). E.g. days=7 includes today and the previous 6 days.',
+    schema: { type: 'integer', minimum: 1, maximum: 365, example: 30 },
+  })
+  async getUserSummary(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: User,
+    @Query('opponentIds') opponentIds: string | string[],
+    @Query('gameType') gameType?: string,
+    @Query('days') days?: string,
+  ): Promise<GamesSummaryResponseDto> {
+    const targetUser = await this.usersService.findOne(userId);
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const canView = await this.usersService.canViewUserGameHistory(
+      currentUser,
+      userId,
+    );
+    if (!canView) {
+      throw new ForbiddenException(
+        'You are not allowed to view this user\'s game summary',
+      );
+    }
+
+    const query = await summaryQueryPipe.transform(
+      { opponentIds, gameType, days },
+      { type: 'query', metatype: SummaryQueryDto },
+    );
+
+    return this.gamesService.findSummaryAgainstOpponents(userId, query.opponentIds, {
+      gameType: query.gameType,
+      days: query.days,
+      limit: 50,
+      publicOnly: true,
+    });
   }
 
   @Get(':userId/history')
