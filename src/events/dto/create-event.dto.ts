@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsString,
@@ -10,8 +10,14 @@ import {
   IsDateString,
   IsOptional,
   IsBoolean,
+  ValidateIf,
 } from 'class-validator';
 import { GameType } from 'src/common/enums/gameType';
+import { EventMode } from '../enums/event-mode.enum';
+import {
+  MAX_EVENT_PARTICIPANT_LIMIT,
+  MIN_EVENT_PARTICIPANT_LIMIT,
+} from '../events.helpers';
 
 // Helper to transform string "true"/"false" to boolean
 const ToBoolean = () => Transform(({ value }) => {
@@ -107,16 +113,45 @@ export class CreateEventDto {
   gameType: GameType;
 
   @ApiProperty({
-    description: 'Number of rounds in the event',
+    description: 'Event format mode',
+    enum: EventMode,
+    example: EventMode.Tournament,
+  })
+  @IsEnum(EventMode)
+  mode: EventMode;
+
+  @ApiProperty({
+    description: 'Number of rounds (required for tournament and limited_rounds modes)',
     example: 3,
     minimum: 1,
     maximum: 20,
+    required: false,
   })
+  @ValidateIf((dto: CreateEventDto) =>
+    dto.mode === EventMode.Tournament || dto.mode === EventMode.LimitedRounds,
+  )
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(20)
-  rounds: number;
+  rounds?: number;
+
+  @ApiProperty({
+    description:
+      'Maximum number of teams that can join (required for tournament and free_for_all; max 20)',
+    example: 8,
+    minimum: MIN_EVENT_PARTICIPANT_LIMIT,
+    maximum: MAX_EVENT_PARTICIPANT_LIMIT,
+    required: false,
+  })
+  @ValidateIf((dto: CreateEventDto) =>
+    dto.mode === EventMode.Tournament || dto.mode === EventMode.FreeForAll,
+  )
+  @Type(() => Number)
+  @IsInt()
+  @Min(MIN_EVENT_PARTICIPANT_LIMIT)
+  @Max(MAX_EVENT_PARTICIPANT_LIMIT)
+  participantLimit?: number;
 
   @ApiProperty({
     description: 'Event location (point). Accepts: JSON {x, y}, string "(x, y)", or string "x, y"',
@@ -143,16 +178,6 @@ export class CreateEventDto {
   roundDuration?: number;
 
   @ApiProperty({
-    description: 'Enable tournament mode with ranking-based matchmaking',
-    example: false,
-    required: false,
-  })
-  @IsOptional()
-  @ToBoolean()
-  @IsBoolean()
-  tournamentMode?: boolean;
-
-  @ApiProperty({
     description: 'Last time users can join this event (must be <= startTime). If omitted, startTime is used as join deadline.',
     required: false,
     example: '2024-12-31T09:30:00Z',
@@ -167,4 +192,13 @@ export class CreateEventDto {
   })
   @IsDateString()
   startTime: string;
+
+  @ApiProperty({
+    description: 'Event end date and time (required for limited_rounds mode; must be after startTime)',
+    required: false,
+    example: '2024-12-31T18:00:00Z',
+  })
+  @ValidateIf((dto: CreateEventDto) => dto.mode === EventMode.LimitedRounds)
+  @IsDateString()
+  endTime?: string;
 }

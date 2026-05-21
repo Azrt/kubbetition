@@ -1,13 +1,8 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
-
-// Helper to transform string "true"/"false" to boolean
-const ToBoolean = () => Transform(({ value }) => {
-  if (value === 'true' || value === true) return true;
-  if (value === 'false' || value === false) return false;
-  return value;
-});
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from "class-validator";
+import { EventMode } from "../enums/event-mode.enum";
+import { MAX_EVENT_PARTICIPANT_LIMIT, MIN_EVENT_PARTICIPANT_LIMIT } from "../events.helpers";
 
 // Helper to transform location to PostgreSQL point format
 // Accepts: JSON {x, y}, string "(x, y)", or string "x, y"
@@ -94,14 +89,35 @@ export class UpdateEventDto {
   roundDuration?: number;
 
   @ApiProperty({
-    description: 'Enable tournament mode with ranking-based matchmaking',
-    example: false,
+    description: 'Event format mode',
+    enum: EventMode,
     required: false,
   })
   @IsOptional()
-  @ToBoolean()
-  @IsBoolean()
-  tournamentMode?: boolean;
+  @IsEnum(EventMode)
+  mode?: EventMode;
+
+  @ApiProperty({
+    description: 'Maximum number of teams that can join',
+    required: false,
+    minimum: MIN_EVENT_PARTICIPANT_LIMIT,
+    maximum: MAX_EVENT_PARTICIPANT_LIMIT,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(MIN_EVENT_PARTICIPANT_LIMIT)
+  @Max(MAX_EVENT_PARTICIPANT_LIMIT)
+  participantLimit?: number;
+
+  @ApiProperty({
+    description: 'Event end date and time',
+    required: false,
+    example: '2024-12-31T18:00:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  endTime?: string;
 
   @ApiProperty({
     description: 'Last time users can join this event (must be <= startTime). If omitted, startTime is used as join deadline.',

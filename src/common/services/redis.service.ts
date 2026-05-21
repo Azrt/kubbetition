@@ -1,13 +1,19 @@
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
-import { Inject, Injectable } from "@nestjs/common";
-import { Cache } from 'cache-manager';
-import { createHash } from 'crypto';
+import { CACHE_MANAGER, Cache } from "@nestjs/cache-manager";
+import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import { createHash } from "crypto";
+import Redis from "ioredis";
+import { REDIS_CLIENT } from "../modules/redis.constants";
 
 @Injectable()
-export class RedisService {
+export class RedisService implements OnModuleDestroy {
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cache: Cache
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
+
+  async onModuleDestroy(): Promise<void> {
+    await this.redis.quit();
+  }
 
   async get<T>(key: string): Promise<T | null> {
     return await this.cache.get<T>(key);
@@ -22,13 +28,20 @@ export class RedisService {
   }
 
   async delByPattern(pattern: string): Promise<void> {
-    const store = this.cache.store as any;
-    if (store.keys) {
-      const keys = await store.keys(pattern);
-      if (keys?.length) {
-        await Promise.all(keys.map((key: string) => this.cache.del(key)));
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        100,
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await Promise.all(keys.map((key) => this.cache.del(key)));
       }
-    }
+    } while (cursor !== "0");
   }
 
   static gameHistoryKey(userId: string, page?: number, limit?: number, includeCancelled?: boolean, includeInProgress?: boolean): string {
@@ -54,7 +67,7 @@ export class RedisService {
   }
 
   static hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return createHash("sha256").update(token).digest("hex");
   }
 
   static refreshTokenKey(userId: string, tokenHash: string): string {

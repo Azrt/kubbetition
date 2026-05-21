@@ -24,6 +24,11 @@ import { EventDetailDto, toEventDetail } from './dto/event-detail.dto';
 import { SimpleEventDto, toSimpleEvent } from './dto/simple-event.dto';
 import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
 import { DivisionsService } from 'src/teams/divisions/divisions.service';
+import { EventMode } from './enums/event-mode.enum';
+import {
+  computeRoundRobinRounds,
+  usesRankingMatchmaking,
+} from './events.helpers';
 
 /** Event participant entry: legacy string[] or object with userIds and optional division info (for round games) */
 export type EventParticipantEntry = string[] | { userIds: string[]; divisionId?: string | null; teamId?: string | null };
@@ -382,6 +387,13 @@ export class EventsService {
       );
     }
 
+    const teamCount = (event.participants || []).length;
+    if (event.participantLimit != null && teamCount >= event.participantLimit) {
+      throw new BadRequestException(
+        `Event has reached the maximum of ${event.participantLimit} teams`,
+      );
+    }
+
     // Store with division info when joining via division (for setting game.team1Division/team2Division when starting round)
     const newEntry = divisionId
       ? { userIds: uniqueTeamIds, divisionId, teamId: userWithTeam!.team!.id }
@@ -421,6 +433,18 @@ export class EventsService {
       updatedEvent.startTime = updateEventDto.startTime ? new Date(updateEventDto.startTime) : event.startTime;
     } catch (error) {
       throw new BadRequestException('Invalid startTime');
+    }
+
+    try {
+      updatedEvent.endTime = updateEventDto.endTime ? new Date(updateEventDto.endTime) : event.endTime;
+    } catch (error) {
+      throw new BadRequestException('Invalid endTime');
+    }
+
+    if (updatedEvent.endTime && updatedEvent.startTime) {
+      if (updatedEvent.endTime.getTime() <= updatedEvent.startTime.getTime()) {
+        throw new BadRequestException('endTime must be after startTime');
+      }
     }
 
     return this.eventsRepository.save(updatedEvent);
@@ -565,12 +589,79 @@ export class EventsService {
     });
   }
 
+  private validateCreateEventDto(createEventDto: CreateEventDto): {
+    rounds: number;
+    participantLimit: number | null;
+    endTime: Date | null;
+  } {
+    const { mode, rounds, participantLimit, endTime, startTime } = createEventDto;
+    const start = new Date(startTime);
+    const end = endTime ? new Date(endTime) : null;
+
+    if (mode === EventMode.Tournament) {
+      if (rounds == null) {
+        throw new BadRequestException('rounds is required for tournament mode');
+      }
+      if (participantLimit == null) {
+        throw new BadRequestException('participantLimit is required for tournament mode');
+      }
+    }
+
+    if (mode === EventMode.LimitedRounds) {
+      if (rounds == null) {
+        throw new BadRequestException('rounds is required for limited_rounds mode');
+      }
+      if (!end) {
+        throw new BadRequestException('endTime is required for limited_rounds mode');
+      }
+      if (end.getTime() <= start.getTime()) {
+        throw new BadRequestException('endTime must be after startTime');
+      }
+    }
+
+    if (mode === EventMode.FreeForAll) {
+      if (participantLimit == null) {
+        throw new BadRequestException('participantLimit is required for free_for_all mode');
+      }
+      if (rounds != null) {
+        throw new BadRequestException('rounds must not be set for free_for_all mode');
+      }
+    }
+
+    if (
+      mode === EventMode.Tournament &&
+      rounds != null &&
+      participantLimit != null &&
+      rounds > participantLimit - 1
+    ) {
+      throw new BadRequestException(
+        'rounds cannot exceed participantLimit - 1 for tournament mode',
+      );
+    }
+
+    return {
+      rounds: mode === EventMode.FreeForAll ? 1 : rounds!,
+      participantLimit: participantLimit ?? null,
+      endTime: end,
+    };
+  }
+
   async create(
     createEventDto: CreateEventDto, 
     currentUser: User,
     imageFile?: Express.Multer.File,
   ): Promise<EventEntity & { imageUrl: string | null }> {
-    const { gameType, rounds, startTime, joiningTime, isPublic, image, ...rest } = createEventDto as any;
+    const {
+      gameType,
+      startTime,
+      joiningTime,
+      isPublic,
+      image,
+      mode,
+      ...rest
+    } = createEventDto;
+
+    const { rounds, participantLimit, endTime } = this.validateCreateEventDto(createEventDto);
 
     const start = new Date(startTime);
     const joining = joiningTime ? new Date(joiningTime) : null;
@@ -584,7 +675,10 @@ export class EventsService {
       participants: [],
       isPublic: isPublic ?? true,
       gameType,
+      mode,
       rounds,
+      participantLimit,
+      endTime,
       currentRound: 0,
       joiningTime: joining,
       startTime: start,
@@ -635,6 +729,24 @@ export class EventsService {
       throw new ForbiddenException('Only the event creator can start rounds');
     }
 
+    // Validate participants exist and match game type before starting round
+    const participantEntries = event.participants || [];
+    const participantsAsArrays = participantEntries.map(getParticipantUserIds);
+    if (participantEntries.length < 2) {
+      throw new BadRequestException('At least 2 teams are required for an event');
+    }
+
+    if (event.mode === EventMode.FreeForAll && roundNumber === 1 && event.currentRound === 0) {
+      event.rounds = computeRoundRobinRounds(participantEntries.length);
+      await this.eventsRepository.save(event);
+    }
+
+    if (event.mode === EventMode.LimitedRounds && event.endTime) {
+      if (new Date().getTime() > new Date(event.endTime).getTime()) {
+        throw new BadRequestException('Cannot start a round after the event end time');
+      }
+    }
+
     // Validate round number
     if (roundNumber < 1 || roundNumber > event.rounds) {
       throw new BadRequestException(
@@ -657,12 +769,6 @@ export class EventsService {
       );
     }
 
-    // Validate participants exist and match game type before starting round
-    const participantEntries = event.participants || [];
-    const participantsAsArrays = participantEntries.map(getParticipantUserIds);
-    if (participantEntries.length < 2) {
-      throw new BadRequestException('At least 2 teams are required for an event');
-    }
     const teamSize = event.gameType;
     for (const team of participantsAsArrays) {
       if (!Array.isArray(team) || team.length !== teamSize) {
@@ -689,18 +795,19 @@ export class EventsService {
       (game) => game.round !== null && game.round < roundNumber && game.team1Score !== null && game.team2Score !== null,
     );
 
-    // Generate matchups - use tournament mode if enabled and not round 1
-    const matchups = event.tournamentMode && roundNumber > 1
-      ? this.generateTournamentMatchups(
-          participantsAsArrays,
-          previousGames,
-          event.gameType,
-        )
-      : this.generateMatchups(
-          participantsAsArrays,
-          previousGames,
-          event.gameType,
-        );
+    // Tournament mode uses ranking-based matchmaking from round 2 onward
+    const matchups =
+      usesRankingMatchmaking(event.mode) && roundNumber > 1
+        ? this.generateTournamentMatchups(
+            participantsAsArrays,
+            previousGames,
+            event.gameType,
+          )
+        : this.generateMatchups(
+            participantsAsArrays,
+            previousGames,
+            event.gameType,
+          );
 
     // Helper: find participant index whose userIds (sorted) match the given team ids
     const findParticipantIndex = (teamIds: string[]): number =>

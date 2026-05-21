@@ -17,7 +17,6 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthModule } from 'src/auth/auth.module';
 import { GamesGateway } from './games.gateway';
 import { FirebaseModule } from 'src/common/modules/firebase.module';
-import { RedisService } from 'src/common/services/redis.service';
 import { FriendRequest } from 'src/users/entities/friend-request.entity';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { FileUploadModule } from 'src/common/modules/file-upload.module';
@@ -43,7 +42,6 @@ import { GamesSchedulerService } from './games-scheduler.service';
     GameReadyRule,
     JwtService,
     GamesGateway,
-    RedisService,
     GeolocationService,
   ],
   exports: [GamesService],

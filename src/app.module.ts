@@ -4,7 +4,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { DevtoolsModule } from '@nestjs/devtools-integration';
 import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GoogleStrategy } from './google.strategy';
@@ -69,9 +68,6 @@ import { EventsModule } from './events/events.module';
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot({
       verboseMemoryLeak: process.env.NODE_ENV !== "production",
-    }),
-    DevtoolsModule.register({
-      http: process.env.NODE_ENV !== "production",
     }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -2,6 +2,7 @@ import { Common } from 'src/common/entities/CommonEntity';
 import { GameType } from 'src/common/enums/gameType';
 import { Game } from 'src/games/entities/game.entity';
 import { User } from 'src/users/entities/user.entity';
+import { EventMode } from '../enums/event-mode.enum';
 import {
   Check,
   Column,
@@ -57,8 +58,25 @@ export class Event extends Common {
   @Column({ type: "int", nullable: true })
   roundDuration: number;
 
-  @Column({ type: "bool", default: false })
-  tournamentMode: boolean;
+  @Column({
+    type: 'enum',
+    enum: EventMode,
+    default: EventMode.LimitedRounds,
+  })
+  mode: EventMode;
+
+  /**
+   * Max number of teams (participant entries) allowed to join.
+   * Required for tournament and free-for-all modes.
+   */
+  @Column({ type: 'int', nullable: true })
+  participantLimit: number | null;
+
+  /**
+   * Scheduled end of the event. Required for limited-rounds mode.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  endTime: Date | null;
 
   /**
    * Last moment users are allowed to join this event.

@@ -19,8 +19,6 @@ import { JwtMiddleware } from './middleware/jwt.middleware';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { GamesModule } from 'src/games/games.module';
 import { FileUploadModule } from 'src/common/modules/file-upload.module';
-import { RedisModule } from 'src/common/modules/redis.module';
-
 const globalGuards = [
   {
     provide: APP_GUARD,
@@ -43,7 +41,6 @@ const globalGuards = [
     TypeOrmModule.forFeature([User, Team, FriendRequest]),
     forwardRef(() => GamesModule),
     FileUploadModule,
-    RedisModule,
   ],
   controllers: [AuthController],
   providers: [

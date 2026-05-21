@@ -48,17 +48,35 @@ export class EventsController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['name', 'details', 'gameType', 'rounds', 'startTime'],
+      required: ['name', 'details', 'gameType', 'mode', 'startTime'],
       properties: {
         name: { type: 'string', description: 'Event name', example: 'Summer Tournament' },
         details: { type: 'string', description: 'Event details', example: 'Annual summer tournament' },
         gameType: { type: 'number', description: 'Game type (1=1v1, 2=2v2, etc.)', example: 2 },
-        rounds: { type: 'number', description: 'Number of rounds', example: 3 },
+        mode: {
+          type: 'string',
+          enum: ['tournament', 'free_for_all', 'limited_rounds'],
+          description: 'Event format: tournament, free_for_all, or limited_rounds',
+        },
+        rounds: {
+          type: 'number',
+          description: 'Number of rounds (tournament and limited_rounds)',
+          example: 3,
+        },
+        participantLimit: {
+          type: 'number',
+          description: 'Max teams (tournament and free_for_all; max 20)',
+          example: 8,
+        },
+        endTime: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Event end time (required for limited_rounds)',
+        },
         startTime: { type: 'string', format: 'date-time', description: 'Event start time', example: '2024-12-31T10:00:00Z' },
         joiningTime: { type: 'string', format: 'date-time', description: 'Last time to join (optional)' },
         location: { type: 'string', description: 'Location as point (x, y)', example: '(16.93, 52.40)' },
         roundDuration: { type: 'number', description: 'Round duration in minutes', example: 20 },
-        tournamentMode: { type: 'boolean', description: 'Enable tournament mode' },
         isPublic: { type: 'boolean', description: 'Whether event is public', default: true },
         image: { type: 'string', format: 'binary', description: 'Event image (JPEG, PNG, or WebP)' },
       },

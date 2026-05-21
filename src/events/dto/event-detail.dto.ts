@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GameType } from 'src/common/enums/gameType';
 import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
 import { Event } from '../entities/event.entity';
+import { EventMode } from '../enums/event-mode.enum';
 
 export class EventDetailDto {
   @ApiProperty()
@@ -40,8 +41,14 @@ export class EventDetailDto {
   @ApiPropertyOptional({ nullable: true })
   roundDuration: number | null;
 
-  @ApiProperty()
-  tournamentMode: boolean;
+  @ApiProperty({ enum: EventMode })
+  mode: EventMode;
+
+  @ApiPropertyOptional({ nullable: true })
+  participantLimit: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  endTime: Date | null;
 
   @ApiPropertyOptional({ nullable: true })
   joiningTime: Date | null;
@@ -73,7 +80,9 @@ export function toEventDetail(
     currentRound: event.currentRound ?? 0,
     location: event.location ?? null,
     roundDuration: event.roundDuration ?? null,
-    tournamentMode: event.tournamentMode,
+    mode: event.mode,
+    participantLimit: event.participantLimit ?? null,
+    endTime: event.endTime ?? null,
     joiningTime: event.joiningTime ?? null,
     startTime: event.startTime,
     createdBy: toSimpleUser(event.createdBy),
