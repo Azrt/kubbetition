@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, ForbiddenException, NotFoundException, ValidationPipe } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { GamesService } from './games.service';
 import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
@@ -6,7 +7,7 @@ import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 import { Game } from './entities/game.entity';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
 import { BodyContextInterceptor } from 'src/common/interceptors/body-context.interceptor';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
@@ -19,7 +20,25 @@ import { UsersService } from 'src/users/users.service';
 import { JoinTeamParamsDto } from './dto/join-team.dto';
 import { TeamReadyParamsDto } from './dto/team-ready.dto';
 import { UpdateTeamScoreParamsDto, UpdateTeamScoreBodyDto } from './dto/update-team-score.dto';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { isAdminRole } from 'src/common/helpers/user';
+import { SummaryQueryDto } from './dto/summary-query.dto';
+import { GamesSummaryResponseDto } from './dto/summary-response.dto';
+import { ApiQuery } from '@nestjs/swagger';
+import { DivisionStatsDto } from 'src/teams/divisions/dto/division-stats.dto';
 
+const API_GAME_ID_PATH_PARAM = {
+  name: 'gameId',
+  schema: { type: 'string' as const, format: 'uuid' as const },
+};
+
+const summaryQueryPipe = new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+});
+
+@ApiTags('games')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("games")
 export class GamesController {
@@ -28,6 +47,7 @@ export class GamesController {
     private readonly gamesGateway: GamesGateway,
     private readonly notificationsService: NotificationsService,
     private readonly usersService: UsersService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -56,10 +76,17 @@ export class GamesController {
   }
 
   @Get()
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   async findAll(
     @Paginate() query: PaginateQuery,
+    @CurrentUser() currentUser: User,
+    @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findAll(query);
+    const includeCancelled = cancelled === 'true';
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findAll(query, currentUser, includeCancelled, includeInProgress);
   }
 
   @Get("active")
@@ -68,35 +95,101 @@ export class GamesController {
   }
 
   @Get("history")
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   findCurrentUserHistory(
     @CurrentUser() currentUser: User,
-    @Paginate() query: PaginateQuery
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findUserHistory(currentUser.id, query);
+    const includeCancelled = cancelled === 'true';
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserHistory(currentUser.id, query, includeCancelled, includeInProgress);
   }
 
   @Get("history/:userId")
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
   findUserHistory(
     @Param("userId") userId: string,
-    @Paginate() query: PaginateQuery
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
   ): Promise<Paginated<Game>> {
-    return this.gamesService.findUserHistory(+userId, query);
+    const includeCancelled = cancelled === 'true';
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserHistory(userId, query, includeCancelled, includeInProgress);
+  }
+
+  @Get("division/:divisionId/stats")
+  @ApiQuery({ name: 'teamId', required: true, description: 'Team that owns the division' })
+  getDivisionStats(
+    @Param("divisionId") divisionId: string,
+    @Query("teamId") teamId: string,
+    @CurrentUser() currentUser: User,
+  ): Promise<DivisionStatsDto> {
+    return this.gamesService.getDivisionStats(divisionId, teamId, currentUser);
+  }
+
+  @Get("division/:divisionId")
+  @ApiQuery({ name: 'teamId', required: true, description: 'Team that owns the division' })
+  findDivisionHistory(
+    @Param("divisionId") divisionId: string,
+    @Query("teamId") teamId: string,
+    @CurrentUser() currentUser: User,
+    @Paginate() query: PaginateQuery,
+  ): Promise<Paginated<Game>> {
+    return this.gamesService.findDivisionHistory(divisionId, teamId, currentUser, query);
+  }
+
+  @Get("summary")
+  @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
+  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 4, 6], description: 'Filter by game type (1=1v1, 2=2v2, 3=3v3, 4=4v4, 6=6v6)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: 'integer',
+    description: 'Only include games that ended within the last N calendar days (including today). E.g. days=7 includes today and the previous 6 days.',
+    schema: { type: 'integer', minimum: 1, maximum: 365, example: 30 },
+  })
+  async getSummary(
+    @CurrentUser() currentUser: User,
+    @Query('opponentIds') opponentIds: string | string[],
+    @Query('gameType') gameType?: string,
+    @Query('days') days?: string,
+  ): Promise<GamesSummaryResponseDto> {
+    const query = await summaryQueryPipe.transform(
+      { opponentIds, gameType, days },
+      { type: 'query', metatype: SummaryQueryDto },
+    );
+
+    return this.gamesService.findSummaryAgainstOpponents(currentUser.id, query.opponentIds, {
+      gameType: query.gameType,
+      days: query.days,
+      limit: 50,
+    });
   }
 
   @Get(":gameId")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(NotFoundInterceptor)
-  findOne(@Param("gameId") gameId: string) {
-    return this.gamesService.findOne(+gameId);
+  findOne(
+    @Param("gameId") gameId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.gamesService.findOne(gameId, currentUser);
   }
 
   @Patch(":gameId")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   @UseInterceptors(BodyContextInterceptor)
   async update(
     @Param("gameId") gameId: string,
     @Body() updateGameDto: UpdateGameDto,
     @CurrentUser() currentUser: User
   ) {
-    const game = await this.gamesService.update(+gameId, updateGameDto, currentUser);
+    const game = await this.gamesService.update(gameId, updateGameDto, currentUser);
   
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -104,22 +197,50 @@ export class GamesController {
   }
 
   @Delete(":gameId")
-  remove(@Param("gameId") gameId: string) {
-    return this.gamesService.remove(+gameId);
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  async remove(
+    @Param("gameId") gameId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const game = await this.gamesService.findOne(gameId, currentUser);
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+    if (game.createdBy?.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only the game creator or an admin can delete a game');
+    }
+    await this.gamesService.remove(gameId);
+    return { message: 'Game deleted' };
   }
 
   @Patch(":gameId/end")
-  async end(@Param() params: EndGameDto) {
-    const game = await this.gamesService.endGame(+params.gameId);
-    await this.gamesGateway.sendGameDataToClients(game);
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  async end(
+    @Param() params: EndGameDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    const game = await this.gamesService.findOne(params.gameId, currentUser);
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+    const isParticipant = game.participants?.some(p => p.id === currentUser.id) ||
+      game.team1Members?.some(m => m.id === currentUser.id) ||
+      game.team2Members?.some(m => m.id === currentUser.id);
+    if (!isParticipant && game.createdBy?.id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('Only game participants, the creator, or an admin can end a game');
+    }
 
-    return game;
+    const endedGame = await this.gamesService.endGame(params.gameId);
+    await this.gamesGateway.sendGameDataToClients(endedGame);
+
+    return endedGame;
   }
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/cancel")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async cancel(@Param() params: CancelGameDto) {
-    const game = await this.gamesService.cancelGame(+params.gameId);
+    const game = await this.gamesService.cancelGame(params.gameId);
 
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -128,18 +249,18 @@ export class GamesController {
 
   // Team operations
   @UseInterceptors(ParamContextInterceptor)
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Post(":gameId/team/:team/join")
   async joinTeam(
     @Param() params: JoinTeamParamsDto,
     @CurrentUser() user: User
   ) {
-    console.log('Team joining - Raw params:', params);
-    console.log('Team joining - gameId (raw):', params.gameId, 'gameId (converted):', +params.gameId);
-    console.log('Team joining - team (raw):', params.team, 'team (converted):', +params.team, 'team (as 1|2):', +params.team as 1 | 2);
-    console.log('Team joining - user:', user.id, user.email);
-
     const game = await this.gamesService.joinTeam(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       user
     );
@@ -151,11 +272,12 @@ export class GamesController {
 
   @UseInterceptors(ParamContextInterceptor)
   @Post(":gameId/leave")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
   async leaveTeam(
     @Param("gameId") gameId: string,
     @CurrentUser() user: User
   ) {
-    const game = await this.gamesService.leaveTeam(+gameId, user);
+    const game = await this.gamesService.leaveTeam(gameId, user);
 
     await this.gamesGateway.sendGameDataToClients(game);
 
@@ -163,13 +285,18 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor)
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Post(":gameId/team/:team/ready")
   async setTeamReady(
     @Param() params: TeamReadyParamsDto,
     @CurrentUser() user: User
   ) {
     const game = await this.gamesService.setTeamReady(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       user
     );
@@ -180,6 +307,11 @@ export class GamesController {
   }
 
   @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  @ApiParam({
+    name: 'team',
+    type: 'integer',
+  })
   @Patch(":gameId/team/:team/score")
   async updateTeamScore(
     @Param() params: UpdateTeamScoreParamsDto,
@@ -187,7 +319,7 @@ export class GamesController {
     @CurrentUser() user: User
   ) {
     const game = await this.gamesService.updateTeamScore(
-      +params.gameId,
+      params.gameId,
       +params.team as 1 | 2,
       body.score,
       user
@@ -196,5 +328,84 @@ export class GamesController {
     await this.gamesGateway.sendGameDataToClients(game);
 
     return game;
+  }
+
+  @Post(":gameId/social-photo")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  async uploadSocialPhoto(
+    @Param("gameId") gameId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ) {
+    const game = await this.gamesService.findOne(gameId, user);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    // Check if user is a participant in the game
+    const isParticipant = game.participants?.some((p) => p.id === user.id) ||
+      game.team1Members?.some((m) => m.id === user.id) ||
+      game.team2Members?.some((m) => m.id === user.id);
+
+    if (!isParticipant && !isAdminRole(user)) {
+      throw new ForbiddenException('Only game participants can upload social photos');
+    }
+
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.GAME_PHOTO, gameId, {
+      resize: { width: 1024, height: 1024 },
+      format: 'jpeg',
+    });
+
+    // Delete old photo if exists
+    if (game.socialPhoto) {
+      await this.fileUploadService.deleteFile(game.socialPhoto, FileType.GAME_PHOTO);
+    }
+
+    // Store the file path (format: game/{gameId}/social-photo.jpg) in database
+    const updatedGame = await this.gamesService.updateSocialPhoto(gameId, filePath);
+    await this.gamesGateway.sendGameDataToClients(updatedGame);
+
+    return updatedGame;
+  }
+
+  @Get(":gameId/social-photo")
+  @ApiParam(API_GAME_ID_PATH_PARAM)
+  @UseInterceptors(ParamContextInterceptor, NotFoundInterceptor)
+  async getSocialPhotoUrl(
+    @Param("gameId") gameId: string,
+    @CurrentUser() user: User,
+  ) {
+    const game = await this.gamesService.findOne(gameId, user);
+
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+
+    // findOne nulls socialPhoto when the user lacks access, so a null value
+    // here means either "no photo exists" or "no access". Re-check access only
+    // on this sad path so the happy path stays a single DB lookup, while still
+    // returning a proper 403 for users who just don't have access.
+    if (!game.socialPhoto) {
+      const hasAccess = await this.gamesService.canAccessGameSocialPhoto(gameId, user);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this social photo');
+      }
+      throw new NotFoundException('Game does not have a social photo');
+    }
+
+    // Generate presigned URL with long TTL (1 year) since game photos don't change.
+    // Cloudflare CDN will be used if configured.
+    // game.socialPhoto is stored as file path: game/{gameId}/social-photo.jpg
+    const presignedUrl = await this.fileUploadService.getPresignedUrl(
+      game.socialPhoto,
+      FileType.GAME_PHOTO,
+      undefined, // Use default long TTL for game photos
+      true, // Use Cloudflare CDN if available
+    );
+
+    return { url: presignedUrl };
   }
 }

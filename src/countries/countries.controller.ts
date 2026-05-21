@@ -3,12 +3,13 @@ import {
   Get,
   Req,
 } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { CountriesService } from './countries.service';
 import { Public } from 'src/common/decorators/public.decorator';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 
+@ApiTags('countries')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("countries")
 export class CountriesController {

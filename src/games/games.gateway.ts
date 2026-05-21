@@ -14,7 +14,9 @@ interface ExtendedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: "*",
+    origin: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+      : false,
   },
   namespace: "games",
 })
@@ -31,7 +33,7 @@ export class GamesGateway
   ) {}
 
   private readonly logger = new Logger(GamesGateway.name);
-  private readonly connectedClients = new Map<number, ExtendedSocket>();
+  private readonly connectedClients = new Map<string, ExtendedSocket>();
 
   @WebSocketServer() io: Server;
 

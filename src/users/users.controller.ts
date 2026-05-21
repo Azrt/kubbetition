@@ -9,11 +9,17 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  ForbiddenException,
+  NotFoundException,
+  ParseUUIDPipe,
+  ValidationPipe,
 } from '@nestjs/common';
+import { isAdminRole } from 'src/common/helpers/user';
 import { UsersService } from './users.service';
+import { AuthService } from 'src/auth/auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ThumbnailPipe } from 'src/common/pipes/thumbnail.pipe';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { NotFoundInterceptor } from 'src/common/interceptors/not-found.interceptor';
@@ -25,37 +31,71 @@ import { User } from './entities/user.entity';
 import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
 import { FriendRequestParamDto } from './dto/friend-request-param.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
+import { SearchUserResponseDto } from './dto/search-user-response.dto';
+import { SimpleUserDto } from 'src/common/dto/simple-user.dto';
+import { FriendRequestListItemDto } from './dto/friend-request-list-item.dto';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/role.enum';
+import { Paginate, PaginateQuery, Paginated, PaginatedSwaggerDocs } from 'nestjs-paginate';
+import { USERS_PAGINATION_CONFIG } from './users.constants';
+import { GamesService } from 'src/games/games.service';
+import { Game } from 'src/games/entities/game.entity';
+import { SummaryQueryDto } from 'src/games/dto/summary-query.dto';
+import { GamesSummaryResponseDto } from 'src/games/dto/summary-response.dto';
 
+const summaryQueryPipe = new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+});
+
+@ApiTags('users')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("users")
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly fileUploadService: FileUploadService,
+    private readonly authService: AuthService,
+    private readonly gamesService: GamesService,
+  ) {}
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @PaginatedSwaggerDocs(User, USERS_PAGINATION_CONFIG)
+  findAll(@Paginate() query: PaginateQuery): Promise<Paginated<User>> {
+    return this.usersService.findAll(query);
   }
 
   @Get("search")
-  search(@Query() searchParams: SearchUsersDto) {
+  @ApiResponse({ status: 200, description: 'List of users with limited fields.', type: [SearchUserResponseDto] })
+  search(
+    @Query() searchParams: SearchUsersDto,
+    @CurrentUser() user: User
+  ): Promise<SearchUserResponseDto[]> {
     return this.usersService.search(
       searchParams.email,
       searchParams.lastName,
-      searchParams.teamId
+      searchParams.teamId,
+      searchParams.excludeWithFriendRequest,
+      user
     );
   }
 
   @Get("friends")
+  @ApiResponse({ status: 200, description: 'List of friends.', type: [SimpleUserDto] })
   getFriends(@CurrentUser() user: User) {
     return this.usersService.getFriends(user);
   }
 
   @Get("friends/requests/received")
+  @ApiResponse({ status: 200, description: 'Received friend requests.', type: [FriendRequestListItemDto] })
   getReceivedFriendRequests(@CurrentUser() user: User) {
     return this.usersService.getReceivedFriendRequests(user);
   }
 
   @Get("friends/requests/sent")
+  @ApiResponse({ status: 200, description: 'Sent friend requests.', type: [FriendRequestListItemDto] })
   getSentFriendRequests(@CurrentUser() user: User) {
     return this.usersService.getSentFriendRequests(user);
   }
@@ -74,7 +114,7 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.acceptFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
     );
   }
@@ -85,7 +125,7 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.rejectFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
     );
   }
@@ -96,34 +136,147 @@ export class UsersController {
     @CurrentUser() user: User
   ) {
     return this.usersService.deleteFriendRequest(
-      +params.friendRequestId,
+      params.friendRequestId,
       user
+    );
+  }
+
+  @Get(':userId/summary')
+  @ApiQuery({ name: 'opponentIds', required: true, type: [String], isArray: true, description: 'Opponent user IDs (e.g. for 3v3: the 3 opponents)' })
+  @ApiQuery({ name: 'gameType', required: false, enum: [1, 2, 3, 4, 6], description: 'Filter by game type (1=1v1, 2=2v2, 3=3v3, 4=4v4, 6=6v6)' })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: 'integer',
+    description: 'Only include games that ended within the last N calendar days (including today). E.g. days=7 includes today and the previous 6 days.',
+    schema: { type: 'integer', minimum: 1, maximum: 365, example: 30 },
+  })
+  async getUserSummary(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: User,
+    @Query('opponentIds') opponentIds: string | string[],
+    @Query('gameType') gameType?: string,
+    @Query('days') days?: string,
+  ): Promise<GamesSummaryResponseDto> {
+    const targetUser = await this.usersService.findOne(userId);
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const canView = await this.usersService.canViewUserGameHistory(
+      currentUser,
+      userId,
+    );
+    if (!canView) {
+      throw new ForbiddenException(
+        'You are not allowed to view this user\'s game summary',
+      );
+    }
+
+    const query = await summaryQueryPipe.transform(
+      { opponentIds, gameType, days },
+      { type: 'query', metatype: SummaryQueryDto },
+    );
+
+    return this.gamesService.findSummaryAgainstOpponents(userId, query.opponentIds, {
+      gameType: query.gameType,
+      days: query.days,
+      limit: 50,
+      publicOnly: true,
+    });
+  }
+
+  @Get(':userId/history')
+  @ApiQuery({ name: 'cancelled', required: false, type: Boolean, description: 'If true, include cancelled games' })
+  @ApiQuery({ name: 'inProgress', required: false, type: Boolean, description: 'If true, include games in progress (default: only finished games)' })
+  async getUserHistory(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: User,
+    @Paginate() query: PaginateQuery,
+    @Query('cancelled') cancelled?: string,
+    @Query('inProgress') inProgress?: string,
+  ): Promise<Paginated<Game>> {
+    const targetUser = await this.usersService.findOne(userId);
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const canView = await this.usersService.canViewUserGameHistory(
+      currentUser,
+      userId,
+    );
+    if (!canView) {
+      throw new ForbiddenException(
+        'You are not allowed to view this user\'s game history',
+      );
+    }
+
+    const includeCancelled = cancelled === 'true';
+    const includeInProgress = inProgress === 'true';
+    return this.gamesService.findUserPublicHistory(
+      userId,
+      query,
+      includeCancelled,
+      includeInProgress,
     );
   }
 
   @Get(":id")
   @UseInterceptors(NotFoundInterceptor)
   findOne(@Param("id") id: string) {
-    return this.usersService.findOne(+id);
+    return this.usersService.findOne(id);
   }
 
   @Post(":id/image")
-  @UseInterceptors(FileInterceptor("image"))
-  uploadImage(
-    @Param("id") id: string,
-    @UploadedFile(ThumbnailPipe) image: string
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadImage(
+    @Param("id", ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.usersService.uploadImage(+id, image);
+    // Only allow users to upload their own avatar or admins
+    const isAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'SUPERADMIN';
+    if (id !== currentUser.id && !isAdmin) {
+      throw new ForbiddenException('You can only upload your own avatar');
+    }
+
+    const filePath = await this.fileUploadService.uploadFile(file, FileType.USER_AVATAR, id, {
+      resize: { width: 600, height: 600 },
+      format: 'jpeg',
+    });
+
+    // Delete old image if exists
+    const user = await this.usersService.findOne(id);
+    if (user?.image) {
+      await this.fileUploadService.deleteFile(user.image, FileType.USER_AVATAR);
+    }
+
+    // Store the file path (format: user/{userId}/avatar.jpg) in database
+    return this.usersService.uploadImage(id, filePath);
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  update(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
+    return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.usersService.remove(+id);
+  async remove(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    if (id !== currentUser.id && !isAdminRole(currentUser)) {
+      throw new ForbiddenException('You can only delete your own account');
+    }
+    await this.authService.revokeAllUserTokens(id);
+    return this.usersService.remove(id);
   }
 
   @Patch(":id/token")

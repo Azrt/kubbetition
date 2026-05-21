@@ -3,7 +3,7 @@ import { CreateGameDto } from './dto/create-game.dto';
 import { UpdateGameDto } from './dto/update-game.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Game } from './entities/game.entity';
-import { In, IsNull, Repository } from 'typeorm';
+import { Brackets, In, IsNull, LessThan, Repository } from 'typeorm';
 import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
 import { GAMES_PAGINATION_CONFIG, GAME_RELATIONS } from './games.constants';
 import { User } from 'src/users/entities/user.entity';
@@ -13,6 +13,10 @@ import { GameReadyEvent, GAME_READY_EVENT } from './events/game-ready.event';
 import { GameUpdateEvent, GAME_UPDATE_EVENT } from './events/game-update.event';
 import { RedisService } from 'src/common/services/redis.service';
 import { isAdminRole } from 'src/common/helpers/user';
+import { UsersService } from 'src/users/users.service';
+import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
+import { DivisionsService } from 'src/teams/divisions/divisions.service';
+import { DIVISION_GAME_TYPES } from 'src/common/enums/gameType';
 
 const HISTORY_CACHE_TTL = 300000; // 5 minutes in ms
 
@@ -25,10 +29,36 @@ export class GamesService implements GamesServiceInterface {
     private usersRepository: Repository<User>,
     private eventEmitter: EventEmitter2,
     private redisService: RedisService,
+    private usersService: UsersService,
+    private fileUploadService: FileUploadService,
+    private divisionsService: DivisionsService,
   ) {}
 
   async create(createGameDto: CreateGameDto, currentUser: User) {
-    const { participants, ...data } = createGameDto;
+    const {
+      participants,
+      randomize = false,
+      team1DivisionId,
+      team2DivisionId,
+      ...data
+    } = createGameDto;
+
+    const useDivisions = !!team1DivisionId && !!team2DivisionId;
+    if (team1DivisionId && !team2DivisionId) {
+      throw new BadRequestException(
+        'team1DivisionId and team2DivisionId must be provided together',
+      );
+    }
+    if (team2DivisionId && !team1DivisionId) {
+      throw new BadRequestException(
+        'team1DivisionId and team2DivisionId must be provided together',
+      );
+    }
+    if (useDivisions && !DIVISION_GAME_TYPES.includes(data.type)) {
+      throw new BadRequestException(
+        'Game type must be 2v2, 3v3, 4v4, or 6v6 when using divisions (1v1 is not supported for divisions)',
+      );
+    }
 
     const game = this.gamesRepository.create({
       ...data,
@@ -40,36 +70,119 @@ export class GamesService implements GamesServiceInterface {
       team2Score: null,
       team1Ready: false,
       team2Ready: false,
+      winner: null,
     });
 
     const savedGame = await this.gamesRepository.save(game);
 
-    // Load and assign participants if provided
-    if (participants && participants.length > 0) {
+    if (useDivisions) {
+      const [team1Ids, team2Ids] = await Promise.all([
+        this.divisionsService.getDivisionMemberIdsByType(team1DivisionId!, data.type),
+        this.divisionsService.getDivisionMemberIdsByType(team2DivisionId!, data.type),
+      ]);
+      const team1Users = await this.usersRepository.findBy({ id: In(team1Ids) });
+      const team2Users = await this.usersRepository.findBy({ id: In(team2Ids) });
+      if (team1Users.length !== data.type || team2Users.length !== data.type) {
+        throw new BadRequestException(
+          'One or both divisions do not have the required number of members',
+        );
+      }
+      savedGame.team1Division = { id: team1DivisionId! } as any;
+      savedGame.team2Division = { id: team2DivisionId! } as any;
+      savedGame.team1Members = team1Users;
+      savedGame.team2Members = team2Users;
+      savedGame.participants = [...team1Users, ...team2Users];
+      await this.gamesRepository.save(savedGame);
+    } else if (participants && participants.length > 0) {
       const participantUsers = await this.usersRepository.findBy({ id: In(participants) });
       savedGame.participants = participantUsers;
+
+      if (randomize && participantUsers.length >= 2) {
+        const shuffled = this.shuffleArray([...participantUsers]);
+        const half = Math.floor(shuffled.length / 2);
+        savedGame.team1Members = shuffled.slice(0, half);
+        savedGame.team2Members = shuffled.slice(half);
+      }
+
       await this.gamesRepository.save(savedGame);
     }
 
     return this.findOne(savedGame.id);
   }
 
-  async endGame(id: number) {
+  private shuffleArray<T>(array: T[]): T[] {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  async updateSocialPhoto(id: string, photoUrl: string) {
+    await this.gamesRepository.update(id, { socialPhoto: photoUrl });
+    return this.findOne(id);
+  }
+
+  async endGame(id: string) {
+    const game = await this.gamesRepository.findOne({
+      where: { id },
+      select: ['id', 'team1Score', 'team2Score'],
+    });
+    let winner: 1 | 2 | null = null;
+    if (game?.team1Score !== null && game?.team2Score !== null) {
+      if (game.team1Score > game.team2Score) winner = 1;
+      else if (game.team2Score > game.team1Score) winner = 2;
+    }
     await this.gamesRepository.update(id, {
       endTime: new Date(),
+      ...(game?.team1Score != null && game?.team2Score != null ? { winner } : {}),
     });
 
-    const game = await this.findOne(id);
+    const updated = await this.findOne(id);
 
-    // Invalidate cache for all participants
-    if (game) {
+    if (updated) {
+      await this.invalidateHistoryCacheForGame(updated);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Finds all non-ended games that started more than an hour ago,
+   * sets score 0 for teams that did not submit, and ends the games.
+   * Used by the hourly cron to auto-close stale games.
+   */
+  async closeStaleUnfinishedGames(): Promise<number> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const staleGames = await this.gamesRepository.find({
+      relations: GAME_RELATIONS,
+      where: {
+        endTime: IsNull(),
+        isCancelled: false,
+        startTime: LessThan(oneHourAgo),
+      },
+    });
+
+    for (const game of staleGames) {
+      const team1Score = game.team1Score ?? 0;
+      const team2Score = game.team2Score ?? 0;
+      let winner: 1 | 2 | null = null;
+      if (team1Score > team2Score) winner = 1;
+      else if (team2Score > team1Score) winner = 2;
+      await this.gamesRepository.update(game.id, {
+        team1Score,
+        team2Score,
+        endTime: new Date(),
+        winner,
+      });
       await this.invalidateHistoryCacheForGame(game);
     }
 
-    return game;
+    return staleGames.length;
   }
 
-  async startGame(id: number) {
+  async startGame(id: string) {
     await this.gamesRepository.update(id, {
       startTime: new Date(),
     });
@@ -77,24 +190,198 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(id);
   }
 
-  findAll(query?: PaginateQuery) {
-    return paginate(query, this.gamesRepository, GAMES_PAGINATION_CONFIG);
+  private eventParticipantWhereClause(): string {
+    // Checks whether event.participants (json) contains userId in any inner team array.
+    // Assumes Postgres jsonb.
+    // Use jsonb_array_elements_text to extract array elements as text, then compare as UUID
+    return `EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(COALESCE(event.participants, '[]')::jsonb) team
+      WHERE EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(team) user_id_text
+        WHERE user_id_text::uuid = CAST(:userId AS UUID)
+      )
+    )`;
   }
 
-  async findOne(id: number) {
+  async findAll(query: PaginateQuery, currentUser: User, includeCancelled = false, includeInProgress = false) {
+    const qb = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.participants', 'participants')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
+      .leftJoinAndSelect('game.event', 'event');
+
+    if (!includeCancelled) {
+      qb.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
+    }
+
+    if (!includeInProgress) {
+      qb.andWhere('game.endTime IS NOT NULL');
+    }
+
+    if (!isAdminRole(currentUser)) {
+      // For regular users, filter by:
+      // 1. Games where user is in game.participants (ManyToMany relation)
+      // 2. OR public events where user is a participant
+      qb.andWhere(
+        `(
+          participants.id = :userId 
+          OR (event.isPublic = true AND ${this.eventParticipantWhereClause()})
+        )`,
+        { userId: currentUser.id },
+      );
+    }
+
+    const result = await paginate(query, qb, {
+      ...GAMES_PAGINATION_CONFIG,
+      relations: undefined,
+    } as any);
+    result.data = result.data.map((g) => this.trimGameForList(g));
+    return result;
+  }
+
+  /**
+   * Games where the given division played (as team1 or team2). User must have access to the division (team member or admin).
+   */
+  async findDivisionHistory(
+    divisionId: string,
+    teamId: string,
+    currentUser: User,
+    query: PaginateQuery,
+  ): Promise<Paginated<Game>> {
+    await this.divisionsService.findOne(teamId, divisionId, currentUser);
+
+    const qb = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.event', 'event')
+      .where('(team1Division.id = :divisionId OR team2Division.id = :divisionId)', { divisionId })
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: false })
+      .andWhere('game.endTime IS NOT NULL')
+      .orderBy('game.endTime', 'DESC');
+
+    const result = await paginate(query, qb, {
+      sortableColumns: ['id', 'endTime', 'startTime', 'createdAt'],
+      defaultSortBy: [['endTime', 'DESC']],
+      maxLimit: 50,
+    });
+    result.data.forEach((g) => this.computeGameProperties(g));
+    return result;
+  }
+
+  /**
+   * Aggregate stats for a division (wins, losses, draws, points for/against). User must have access to the division.
+   */
+  async getDivisionStats(
+    divisionId: string,
+    teamId: string,
+    currentUser: User,
+  ): Promise<{
+    totalGames: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    winRate: number;
+    pointsFor: number;
+    pointsAgainst: number;
+    pointDifferential: number;
+  }> {
+    await this.divisionsService.findOne(teamId, divisionId, currentUser);
+
+    const games = await this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
+      .where('(team1Division.id = :divisionId OR team2Division.id = :divisionId)', { divisionId })
+      .andWhere('game.endTime IS NOT NULL')
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: false })
+      .getMany();
+
+    let wins = 0;
+    let losses = 0;
+    let draws = 0;
+    let pointsFor = 0;
+    let pointsAgainst = 0;
+
+    for (const game of games) {
+      const isTeam1 = game.team1Division?.id === divisionId;
+      const pf = isTeam1 ? (game.team1Score ?? 0) : (game.team2Score ?? 0);
+      const pa = isTeam1 ? (game.team2Score ?? 0) : (game.team1Score ?? 0);
+      pointsFor += pf;
+      pointsAgainst += pa;
+      if (game.winner === null) {
+        draws++;
+      } else if ((game.winner === 1 && isTeam1) || (game.winner === 2 && !isTeam1)) {
+        wins++;
+      } else {
+        losses++;
+      }
+    }
+
+    const totalGames = games.length;
+    const winRate = totalGames > 0 ? wins / totalGames : 0;
+
+    return {
+      totalGames,
+      wins,
+      losses,
+      draws,
+      winRate,
+      pointsFor,
+      pointsAgainst,
+      pointDifferential: pointsFor - pointsAgainst,
+    };
+  }
+
+  async findOne(id: string, currentUser?: User) {
     const game = await this.gamesRepository.findOne({
       relations: GAME_RELATIONS,
       where: { id },
     });
 
     if (game) {
+      if (game.event && game.event.isPublic === false && currentUser && !isAdminRole(currentUser)) {
+        const teams = game.event.participants || [];
+        const isParticipant = teams.some((t) => {
+          const ids = Array.isArray(t) ? t : (t as { userIds: string[] }).userIds;
+          return ids.includes(currentUser.id);
+        });
+        if (!isParticipant) {
+          throw new ForbiddenException('You are not allowed to access this game');
+        }
+      }
       this.computeGameProperties(game);
+
+      // Hide social photo if user doesn't have access (private S3 objects require presigned URLs)
+      // Clients should use the dedicated endpoint to get presigned URLs
+      if (game.socialPhoto && currentUser) {
+        const hasAccess = await this.canAccessGameSocialPhoto(id, currentUser);
+        if (!hasAccess) {
+          game.socialPhoto = null;
+        }
+      } else if (game.socialPhoto && !currentUser) {
+        // No user provided, hide the photo (requires authentication)
+        game.socialPhoto = null;
+      }
     }
 
     return game;
   }
 
-  async cancelGame(id: number) {
+  async cancelGame(id: string) {
     const game = await this.findOne(id);
     
     await this.gamesRepository.save({
@@ -110,7 +397,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(id);
   }
 
-  async update(id: number, updateGameDto: UpdateGameDto, user: User) {
+  async update(id: string, updateGameDto: UpdateGameDto, user: User) {
     const game = await this.findOne(id);
 
     if (!game) {
@@ -146,15 +433,27 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(savedGame.id);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} game`;
+  async remove(id: string): Promise<void> {
+    const game = await this.gamesRepository.findOne({
+      where: { id },
+      relations: ['participants', 'team1Members', 'team2Members'],
+    });
+    if (!game) return;
+
+    game.participants = [];
+    game.team1Members = [];
+    game.team2Members = [];
+    await this.gamesRepository.save(game);
+    await this.gamesRepository.delete(id);
   }
 
   async findAllUserActive(user: User) {
     const games = await this.gamesRepository.find({
       relations: GAME_RELATIONS,
       where: [
-        { endTime: IsNull(), participants: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, participants: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, team1Members: { id: user?.id } },
+        { endTime: IsNull(), isCancelled: false, team2Members: { id: user?.id } },
       ],
     });
 
@@ -162,10 +461,10 @@ export class GamesService implements GamesServiceInterface {
     return games;
   }
 
-  async findUserHistory(userId: number, query?: PaginateQuery): Promise<Paginated<Game>> {
+  async findUserHistory(userId: string, query?: PaginateQuery, includeCancelled = false, includeInProgress = false): Promise<Paginated<Game>> {
     const page = query?.page ?? 1;
     const limit = query?.limit ?? 10;
-    const cacheKey = RedisService.gameHistoryKey(userId, page, limit);
+    const cacheKey = RedisService.gameHistoryKey(userId, page, limit, includeCancelled, includeInProgress);
 
     // Try to get from cache
     const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
@@ -181,13 +480,21 @@ export class GamesService implements GamesServiceInterface {
       .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
       .leftJoinAndSelect('game.team2Members', 'team2Members')
       .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
-      .where('game.endTime IS NOT NULL')
-      .andWhere('game.isCancelled = :isCancelled', { isCancelled: false })
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
       .andWhere(
         '(team1Members.id = :userId OR team2Members.id = :userId)',
         { userId }
       )
-      .orderBy('game.endTime', 'DESC');
+      .orderBy({ 'game.endTime': { order: 'DESC', nulls: 'NULLS LAST' } });
+
+    if (!includeInProgress) {
+      queryBuilder.andWhere('game.endTime IS NOT NULL');
+    }
+
+    if (!includeCancelled) {
+      queryBuilder.andWhere('game.isCancelled = :isCancelled', { isCancelled: false });
+    }
 
     const result = await paginate(query, queryBuilder, {
       sortableColumns: ['id', 'endTime', 'startTime'],
@@ -198,14 +505,202 @@ export class GamesService implements GamesServiceInterface {
     // Compute properties for each game
     result.data.forEach(game => this.computeGameProperties(game));
 
+    // Trim payload to only necessary fields for list view
+    result.data = result.data.map((g) => this.trimGameForList(g));
+
     // Store in cache
     await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
 
     return result;
   }
 
+  /**
+   * Finished (or optionally in-progress) games for a user, limited to public games
+   * (no event, or event.isPublic = true). Used by GET users/:userId/history.
+   */
+  async findUserPublicHistory(
+    userId: string,
+    query?: PaginateQuery,
+    includeCancelled = false,
+    includeInProgress = false,
+  ): Promise<Paginated<Game>> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
+    const cacheKey = RedisService.gamePublicHistoryKey(
+      userId,
+      page,
+      limit,
+      includeCancelled,
+      includeInProgress,
+    );
+
+    const cached = await this.redisService.get<Paginated<Game>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const queryBuilder = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.team1Division', 'team1Division')
+      .leftJoinAndSelect('game.team2Division', 'team2Division')
+      .leftJoin('game.event', 'event')
+      .addSelect(['event.id', 'event.name', 'event.gameType', 'event.isPublic'])
+      .andWhere(
+        '(team1Members.id = :userId OR team2Members.id = :userId)',
+        { userId },
+      )
+      .andWhere(
+        new Brackets((qb) => {
+          qb.where('event.id IS NULL').orWhere('event.isPublic = :isPublic', {
+            isPublic: true,
+          });
+        }),
+      )
+      .orderBy({ 'game.endTime': { order: 'DESC', nulls: 'NULLS LAST' } });
+
+    if (!includeInProgress) {
+      queryBuilder.andWhere('game.endTime IS NOT NULL');
+    }
+
+    if (!includeCancelled) {
+      queryBuilder.andWhere('game.isCancelled = :isCancelled', {
+        isCancelled: false,
+      });
+    }
+
+    const result = await paginate(query, queryBuilder, {
+      sortableColumns: ['id', 'endTime', 'startTime'],
+      defaultSortBy: [['endTime', 'DESC']],
+      maxLimit: 50,
+    });
+
+    result.data.forEach((game) => this.computeGameProperties(game));
+    result.data = result.data.map((g) => this.trimGameForList(g));
+
+    await this.redisService.set(cacheKey, result, HISTORY_CACHE_TTL);
+
+    return result;
+  }
+
+  /**
+   * Returns history of games played by the current user against a specific group of opponents
+   * (e.g. 3v3: the three people on the other team), with aggregate stats (wins, losses, draws, win rate).
+   * Opponent group is matched by exact set: the other team must consist exactly of the given user IDs.
+   */
+  async findSummaryAgainstOpponents(
+    userId: string,
+    opponentIds: string[],
+    options?: { gameType?: number; days?: number; limit?: number; publicOnly?: boolean },
+  ): Promise<{ summary: { totalGames: number; wins: number; losses: number; draws: number; winRate: number }; games: Game[] }> {
+    const len = opponentIds.length;
+    const limit = Math.min(options?.limit ?? 50, 100);
+    let since: Date | undefined;
+    if (options?.days != null) {
+      since = new Date();
+      since.setHours(0, 0, 0, 0);
+      since.setDate(since.getDate() - (options.days - 1));
+    }
+    const params = {
+      userId,
+      opponentIds,
+      len,
+      isCancelled: false,
+      gameType: options?.gameType,
+      since,
+    };
+
+    const qb = this.gamesRepository
+      .createQueryBuilder('game')
+      .leftJoinAndSelect('game.createdBy', 'createdBy')
+      .leftJoinAndSelect('game.team1Members', 'team1Members')
+      .leftJoinAndSelect('team1Members.team', 'team1MembersTeam')
+      .leftJoinAndSelect('game.team2Members', 'team2Members')
+      .leftJoinAndSelect('team2Members.team', 'team2MembersTeam')
+      .leftJoinAndSelect('game.event', 'event')
+      .where('game.endTime IS NOT NULL')
+      .andWhere('game.isCancelled = :isCancelled', { isCancelled: params.isCancelled });
+
+    if (options?.publicOnly) {
+      qb.andWhere(
+        new Brackets((sub) => {
+          sub.where('event.id IS NULL').orWhere('event.isPublic = :isPublic', {
+            isPublic: true,
+          });
+        }),
+      );
+    }
+
+    qb
+      .andWhere(
+        new Brackets((qb2) => {
+          qb2
+            .where('team1Members.id = :userId')
+            .andWhere(
+              `EXISTS (
+                SELECT 1 FROM game_team2_members g2
+                WHERE g2.game_id = game.id
+                GROUP BY g2.game_id
+                HAVING COUNT(*) = :len AND COUNT(CASE WHEN g2.member_id IN (:...opponentIds) THEN 1 END) = :len
+              )`,
+            )
+            .orWhere(
+              new Brackets((qb3) => {
+                qb3
+                  .where('team2Members.id = :userId')
+                  .andWhere(
+                    `EXISTS (
+                      SELECT 1 FROM game_team1_members g1
+                      WHERE g1.game_id = game.id
+                      GROUP BY g1.game_id
+                      HAVING COUNT(*) = :len AND COUNT(CASE WHEN g1.member_id IN (:...opponentIds) THEN 1 END) = :len
+                    )`,
+                  );
+              }),
+            );
+        }),
+      )
+      .orderBy('game.endTime', 'DESC')
+      .take(limit);
+
+    if (params.gameType != null) {
+      qb.andWhere('game.type = :gameType', { gameType: params.gameType });
+    }
+
+    if (params.since != null) {
+      qb.andWhere('game.endTime >= :since', { since: params.since });
+    }
+
+    qb.setParameters({ userId: params.userId, opponentIds: params.opponentIds, len: params.len });
+
+    const games = await qb.getMany();
+
+    games.forEach((g) => this.computeGameProperties(g));
+
+    let wins = 0;
+    let losses = 0;
+    let draws = 0;
+    for (const g of games) {
+      const myTeam = g.team1Members?.some((m) => m.id === userId) ? 1 : 2;
+      if (g.winner === null) draws++;
+      else if (g.winner === myTeam) wins++;
+      else losses++;
+    }
+    const totalGames = games.length;
+    const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+
+    return {
+      summary: { totalGames, wins, losses, draws, winRate },
+      games,
+    };
+  }
+
   // Team operations
-  async joinTeam(gameId: number, team: 1 | 2, user: User) {
+  async joinTeam(gameId: string, team: 1 | 2, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -242,7 +737,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(gameId);
   }
 
-  async leaveTeam(gameId: number, user: User) {
+  async leaveTeam(gameId: string, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -267,7 +762,7 @@ export class GamesService implements GamesServiceInterface {
     return this.findOne(gameId);
   }
 
-  async setTeamReady(gameId: number, team: 1 | 2, user: User) {
+  async setTeamReady(gameId: string, team: 1 | 2, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -301,7 +796,7 @@ export class GamesService implements GamesServiceInterface {
     return updatedGame;
   }
 
-  async updateTeamScore(gameId: number, team: 1 | 2, score: number, user: User) {
+  async updateTeamScore(gameId: string, team: 1 | 2, score: number, user: User) {
     const game = await this.findOne(gameId);
 
     if (!game) {
@@ -376,6 +871,48 @@ export class GamesService implements GamesServiceInterface {
     return isInTeam || false;
   }
 
+  /**
+   * Trims game entity to only fields needed for list responses (/games, /games/history).
+   * Game: id, createdAt, startTime, endTime, isCancelled, type, duration, team1Score, team2Score, winner, round, socialPhoto.
+   * Event: id, name, type (gameType). Members: id, firstName, lastName, image, team: { id, name }.
+   * Divisions (optional): id, name.
+   */
+  private trimGameForList(game: Game): Game {
+    const trimTeam = (t: { id: string; name: string } | undefined) =>
+      t ? { id: t.id, name: t.name } : undefined;
+    const trimDivision = (d: Game['team1Division']) =>
+      d ? { id: d.id, name: d.name } : undefined;
+    const trimMember = (m: User) => ({
+      id: m.id,
+      firstName: m.firstName,
+      lastName: m.lastName,
+      image: m.image,
+      team: m.team ? trimTeam(m.team) : undefined,
+    });
+    const trimEvent = (e: Game['event']) =>
+      e ? { id: e.id, name: e.name, type: e.gameType } : undefined;
+
+    return {
+      id: game.id,
+      createdAt: game.createdAt,
+      startTime: game.startTime,
+      endTime: game.endTime,
+      isCancelled: game.isCancelled,
+      type: game.type,
+      duration: game.duration,
+      team1Score: game.team1Score,
+      team2Score: game.team2Score,
+      winner: game.winner,
+      round: game.round,
+      socialPhoto: game.socialPhoto,
+      event: trimEvent(game.event) as unknown as Game['event'],
+      team1Division: trimDivision(game.team1Division) as Game['team1Division'],
+      team2Division: trimDivision(game.team2Division) as Game['team2Division'],
+      team1Members: (game.team1Members ?? []).map(trimMember) as User[],
+      team2Members: (game.team2Members ?? []).map(trimMember) as User[],
+    } as Game;
+  }
+
   // Helper to compute properties after loading
   private computeGameProperties(game: Game) {
     game.isGameReady = game.team1Ready && game.team2Ready;
@@ -396,15 +933,80 @@ export class GamesService implements GamesServiceInterface {
 
   // Invalidate history cache for all game participants
   private async invalidateHistoryCacheForGame(game: Game) {
-    const userIds = new Set<number>();
+    const userIds = new Set<string>();
     
     game.team1Members?.forEach(m => userIds.add(m.id));
     game.team2Members?.forEach(m => userIds.add(m.id));
 
     await Promise.all(
-      Array.from(userIds).map(userId =>
-        this.redisService.delByPattern(RedisService.gameHistoryPattern(userId))
-      )
+      Array.from(userIds).flatMap((userId) => [
+        this.redisService.delByPattern(RedisService.gameHistoryPattern(userId)),
+        this.redisService.delByPattern(RedisService.gamePublicHistoryPattern(userId)),
+      ]),
     );
+  }
+
+  /**
+   * Check if a user has access to view a game's social photo.
+   * Access is granted if:
+   * 1. User is a participant in the game (participants, team1Members, or team2Members)
+   * 2. User is a friend of any participant
+   * 3. User is a team member of any participant (if participant has a team assigned)
+   * 4. User is an admin/superadmin
+   */
+  async canAccessGameSocialPhoto(gameId: string, user: User): Promise<boolean> {
+    // Admins always have access
+    if (isAdminRole(user)) {
+      return true;
+    }
+
+    // Load game directly (without going through findOne, which mutates socialPhoto
+    // based on access — that would cause this check to always return false).
+    const game = await this.gamesRepository.findOne({
+      where: { id: gameId },
+      relations: ['participants', 'team1Members', 'team1Members.team', 'team2Members', 'team2Members.team'],
+    });
+    if (!game) {
+      return false;
+    }
+
+    // Collect all participant IDs
+    const participantIds = new Set<string>();
+    game.participants?.forEach(p => participantIds.add(p.id));
+    game.team1Members?.forEach(m => participantIds.add(m.id));
+    game.team2Members?.forEach(m => participantIds.add(m.id));
+
+    // Check if user is a participant
+    if (participantIds.has(user.id)) {
+      return true;
+    }
+
+    // Get user's friends
+    const userFriends = await this.usersService.getFriends(user);
+    const friendIds = new Set(userFriends.map(f => f.id));
+
+    // Check if user is a friend of any participant
+    for (const participantId of participantIds) {
+      if (friendIds.has(participantId)) {
+        return true;
+      }
+    }
+
+    // Check if user is a team member of any participant
+    if (user.team) {
+      const participantUsers = await this.usersRepository.find({
+        where: { id: In(Array.from(participantIds)) },
+        relations: ['team'],
+      });
+
+      for (const participant of participantUsers) {
+        // If participant has a team and it's the same as user's team
+        if (participant.team && participant.team.id === user.team.id) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 }

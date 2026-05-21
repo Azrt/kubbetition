@@ -1,27 +1,34 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'path';
 import { User } from '../../users/entities/user.entity';
 import { Team } from '../../teams/entities/team.entity';
 import { Game } from "../../games/entities/game.entity";
+import { Event } from '../../events/entities/event.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: "postgres",
-        host: configService.get("POSTGRES_HOST"),
-        port: configService.get("POSTGRES_PORT"),
-        username: configService.get("POSTGRES_USER"),
-        password: configService.get("POSTGRES_PASSWORD"),
-        database: configService.get("POSTGRES_DB"),
-        entities: [User, Team, Game],
-        synchronize: true,
-        logging: true,
-        autoLoadEntities: true,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isProduction = configService.get('NODE_ENV') === 'production';
+        return {
+          type: "postgres",
+          host: configService.get("POSTGRES_HOST"),
+          port: configService.get("POSTGRES_PORT"),
+          username: configService.get("POSTGRES_USER"),
+          password: configService.get("POSTGRES_PASSWORD"),
+          database: configService.get("POSTGRES_DB"),
+          entities: [User, Team, Game, Event],
+          migrations: [join(__dirname, '..', '..', 'migrations', '*.js')],
+          migrationsRun: true,
+          synchronize: false,
+          logging: !isProduction,
+          autoLoadEntities: true,
+        };
+      },
     }),
   ],
 })

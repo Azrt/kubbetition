@@ -11,8 +11,8 @@ import { UsersService } from "../users.service";
 export class FriendRequestExistsRule implements ValidatorConstraintInterface {
   constructor(private usersService: UsersService) {}
 
-  async validate(id: number) {
-    const friendRequest = await this.usersService.findFriendRequest(+id);
+  async validate(id: string) {
+    const friendRequest = await this.usersService.findFriendRequest(id);
 
     return !!friendRequest;
   }

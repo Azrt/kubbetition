@@ -16,7 +16,7 @@ export class CreatedByUserRule implements ValidatorConstraintInterface {
     const user = (validationArguments.object as Record<string, any>)?.context
       ?.user as User;
 
-    const game = await this.gameService.findOne(Number(id));
+    const game = await this.gameService.findOne(id);
 
     return game?.createdBy?.id === user?.id;
   }

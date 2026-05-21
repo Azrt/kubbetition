@@ -1,10 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { CreateTeamRequestDto } from "./dto/create-team-request.dto";
-import { ApiBearerAuth } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { SWAGGER_BEARER_TOKEN } from "src/app.constants";
 import { TeamRequestsService } from "./team-requests.service";
 import { Paginate, PaginateQuery, Paginated } from "nestjs-paginate";
-import { TeamRequest } from "./entities/team-request.entity";
+import { TeamRequestListItemDto } from "./dto/team-request-list-item.dto";
 import { User } from "src/users/entities/user.entity";
 import { CurrentUser } from "src/common/decorators/currentUser.decorator";
 import { EmptyTeamGuard } from "src/common/guards/empty-team.guard";
@@ -12,6 +12,7 @@ import { IncludeAdminRoles } from "src/common/decorators/roles.decorator";
 import { Role } from "src/common/enums/role.enum";
 import { TeamRequestParamDto } from "./dto/team-request-param.dto";
 
+@ApiTags('team-requests')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("team-requests")
 export class TeamRequestsController {
@@ -31,8 +32,13 @@ export class TeamRequestsController {
   findAll(
     @Paginate() query: PaginateQuery,
     @CurrentUser() user: User
-  ): Promise<Paginated<TeamRequest>> {
+  ): Promise<Paginated<TeamRequestListItemDto>> {
     return this.teamRequestsService.findAll(query, user);
+  }
+
+  @Get("me")
+  getMyLatestTeamRequest(@CurrentUser() user: User): Promise<TeamRequestListItemDto | null> {
+    return this.teamRequestsService.getMyLatestTeamRequest(user);
   }
 
   @Post(":teamRequestId/accept")
@@ -42,7 +48,7 @@ export class TeamRequestsController {
     @CurrentUser() user: User
   ) {
     return this.teamRequestsService.acceptTeamRequest(
-      +params.teamRequestId,
+      params.teamRequestId,
       user
     );
   }
@@ -54,17 +60,16 @@ export class TeamRequestsController {
     @CurrentUser() user: User
   ) {
     return this.teamRequestsService.rejectTeamRequest(
-      +params.teamRequestId,
+      params.teamRequestId,
       user
     );
   }
 
   @Delete(":teamRequestId")
-  @IncludeAdminRoles()
   remove(
     @Param() params: TeamRequestParamDto,
     @CurrentUser() user: User
   ) {
-    return this.teamRequestsService.remove(+params.teamRequestId, user);
+    return this.teamRequestsService.remove(params.teamRequestId, user);
   }
 }

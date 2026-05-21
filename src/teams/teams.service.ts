@@ -6,6 +6,7 @@ import { DataSource, Repository } from 'typeorm';
 import { PaginateQuery, paginate } from 'nestjs-paginate';
 import { TEAMS_PAGINATION_CONFIG } from './teams.constants';
 import { UpdateTeamMembersDto } from "./dto/update-team.dto";
+import { toTeamMember } from './dto/team-member.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/common/enums/role.enum';
 import { GameType } from 'src/common/enums/gameType';
@@ -63,25 +64,56 @@ export class TeamsService {
     }
   }
 
-  getMyTeam(user: User) {
-    return this.teamsRepository.findOne({
+  async getMyTeam(user: User) {
+    if (!user.team?.id) {
+      return null;
+    }
+
+    const team = await this.teamsRepository.findOne({
       relations: ["members"],
-      where: { id: user.team?.id },
+      where: { id: user.team.id },
+    });
+    if (!team) return null;
+    return { ...team, members: (team.members ?? []).map(toTeamMember) };
+  }
+
+  findAll(query: PaginateQuery, options?: { includeInactive?: boolean }) {
+    const queryBuilder = this.teamsRepository
+      .createQueryBuilder('team')
+      .select([
+        'team.id',
+        'team.name',
+        'team.isActive',
+        'team.country',
+        'team.logo',
+        'team.createdAt',
+        'team.updatedAt',
+      ])
+      .loadRelationCountAndMap('team.membersCount', 'team.members');
+
+    if (!options?.includeInactive) {
+      queryBuilder.andWhere('team.isActive = :isActive', { isActive: true });
+    }
+
+    return paginate(query, queryBuilder, {
+      ...TEAMS_PAGINATION_CONFIG,
+      relations: undefined,
+      sortableColumns: ['id', 'name'],
+      searchableColumns: ['name'],
+      maxLimit: 10,
     });
   }
 
-  findAll(query?: PaginateQuery) {
-    return paginate(query, this.teamsRepository, TEAMS_PAGINATION_CONFIG);
-  }
-
-  findOne(id: number) {
-    return this.teamsRepository.findOne({
+  async findOne(id: string) {
+    const team = await this.teamsRepository.findOne({
       relations: ["members"],
       where: { id },
     });
+    if (!team) return null;
+    return { ...team, members: (team.members ?? []).map(toTeamMember) };
   }
 
-  async update(id: number, updateTeamDto: UpdateTeamMembersDto) {
+  async update(id: string, updateTeamDto: UpdateTeamMembersDto) {
     const team = this.teamsRepository.create(
       updateTeamDto as unknown as Team
     );
@@ -94,7 +126,11 @@ export class TeamsService {
     return this.teamsRepository.save(team);
   }
 
-  async remove(id: number, user: User) {
+  async updateLogo(id: string, logoUrl: string) {
+    return this.teamsRepository.update(id, { logo: logoUrl });
+  }
+
+  async remove(id: string, user: User) {
     const team = await this.teamsRepository.findOne({
       where: { id },
       relations: ['createdBy'],

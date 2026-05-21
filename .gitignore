@@ -134,3 +134,8 @@ dist
 docker.env
 
 pgdata
+
+# Database seeding flag
+.seed-completed
+
+redis

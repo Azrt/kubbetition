@@ -11,10 +11,10 @@ import { UsersService } from "src/users/users.service";
 export class UserExistsRule implements ValidatorConstraintInterface {
   constructor(private usersService: UsersService) {}
 
-  async validate(id: number) {
+  async validate(id: string) {
     if (!id) return false;
 
-    const user = await this.usersService.findOne(+id);
+    const user = await this.usersService.findOne(id);
 
     return !!user;
   }

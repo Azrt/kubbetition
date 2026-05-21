@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.local.env
+pgdata
+redis
+uploads
+*.md
+.dockerignore
+docker-compose.yml
+.vscode
+.cursor
+test
+coverage

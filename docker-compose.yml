@@ -12,7 +12,18 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      # pg_isready alone can pass while Postgres still rejects connections (57P03)
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" && psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1" >/dev/null',
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
   app:
     build:
@@ -24,8 +35,10 @@ services:
     ports:
       - '3000:3000'
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - mainnet
     volumes:
@@ -41,7 +54,7 @@ services:
     env_file:
       - .env
     ports:
-      - '5050:80'
+      - '127.0.0.1:5050:80'
     depends_on:
       - db
 
@@ -53,7 +66,7 @@ services:
     env_file:
       - .env
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     volumes:
       - ./redis/data:/data
 
@@ -68,8 +81,8 @@ services:
     volumes:
       - /var/lib/rabbitmq
     ports:
-      - '5672:5672'
-      - '15672:15672'
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'
 
 networks:
   mainnet:

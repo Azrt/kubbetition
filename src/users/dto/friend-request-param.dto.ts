@@ -1,8 +1,8 @@
-import { IsNumberString, Validate } from "class-validator";
+import { IsUUID, Validate } from "class-validator";
 import { FriendRequestExistsRule } from "../validators/friend-request-exists.rule";
 
 export class FriendRequestParamDto {
-  @IsNumberString()
+  @IsUUID()
   @Validate(FriendRequestExistsRule)
   friendRequestId: string;
 }

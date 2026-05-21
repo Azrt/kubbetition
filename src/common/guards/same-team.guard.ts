@@ -18,13 +18,13 @@ export class SameTeamGuard implements CanActivate {
     const teamId = request.params.teamId;
     const isAdmin = user.role === Role.ADMIN || user.role === Role.SUPERADMIN;
 
-    if (isAdmin || (!!user.team?.id && user.team.id === Number(teamId))) {
+    if (isAdmin || (!!user.team?.id && user.team.id === teamId)) {
       return true;
     }
 
     // Check if user is the team creator
     const team = await this.teamRepository.findOne({
-      where: { id: Number(teamId) },
+      where: { id: teamId },
       relations: ['createdBy'],
     });
 

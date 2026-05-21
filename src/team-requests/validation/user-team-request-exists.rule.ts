@@ -11,8 +11,8 @@ import { TeamRequestsService } from "../team-requests.service";
 export class UserTeamRequestExistsRule implements ValidatorConstraintInterface {
   constructor(private teamRequestsService: TeamRequestsService) {}
 
-  async validate(id: number) {
-    const teamRequests = await this.teamRequestsService.findByUserId(+id);
+  async validate(id: string) {
+    const teamRequests = await this.teamRequestsService.findByUserId(id);
 
     return !teamRequests.length;
   }

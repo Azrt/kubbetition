@@ -12,12 +12,14 @@ import {
   JoinColumn,
   Index,
   OneToMany,
+  DeleteDateColumn,
 } from 'typeorm';
 
 @Entity()
 export class User {
-  @PrimaryGeneratedColumn()
-  public id: number;
+  @PrimaryGeneratedColumn('uuid')
+  @Index()
+  public id: string;
 
   @Column({ length: 250, unique: true })
   @Index("user_email_idx")
@@ -30,10 +32,11 @@ export class User {
   lastName: string;
 
   @Column({ default: true })
+  @Exclude({ toPlainOnly: true })
   isActive: boolean;
 
-  // TODO: Update when there will be different type of user registration
   @Column({ default: true })
+  @Exclude({ toPlainOnly: true })
   isEmailConfirmed: boolean;
 
   @Column({ nullable: true, length: 450 })
@@ -47,7 +50,6 @@ export class User {
   mobileToken: string;
 
   @ManyToOne(() => Team, (team) => team.members, {
-    cascade: true,
     nullable: true,
   })
   @JoinColumn()
@@ -58,6 +60,7 @@ export class User {
     enum: Role,
     default: Role.USER,
   })
+  @Exclude({ toPlainOnly: true })
   role: Role;
 
   @OneToMany(() => TeamRequest, (request) => request.user, {
@@ -80,6 +83,10 @@ export class User {
 
   @OneToMany(() => Game, (game) => game.createdBy)
   createdGames: Array<Game>;
+
+  @DeleteDateColumn()
+  @Exclude({ toPlainOnly: true })
+  deletedAt: Date | null;
 
   constructor(entity: Partial<User>) {
     Object.assign(this, entity);

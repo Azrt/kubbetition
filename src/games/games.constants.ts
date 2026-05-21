@@ -4,10 +4,13 @@ import { Game } from "./entities/game.entity";
 export const GAME_RELATIONS = [
   "createdBy",
   "participants",
+  "team1Division",
   "team1Members",
   "team1Members.team",
+  "team2Division",
   "team2Members",
   "team2Members.team",
+  "event",
 ];
 
 export const GAMES_PAGINATION_CONFIG: PaginateConfig<Game> = {

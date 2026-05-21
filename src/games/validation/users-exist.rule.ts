@@ -11,7 +11,7 @@ import { UsersService } from "src/users/users.service";
 export class UsersExistRule implements ValidatorConstraintInterface {
   constructor(private usersService: UsersService) {}
 
-  async validate(ids: Array<number>, validationArguments: ValidationArguments) {
+  async validate(ids: Array<string>, validationArguments: ValidationArguments) {
     if (!ids?.length) return true; // Empty array is valid (optional field)
 
     const users = await this.usersService.findByIds(ids);

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { isAdminRole } from 'src/common/helpers/user';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,6 +11,11 @@ import { In, Repository } from 'typeorm';
 import { TeamsService } from 'src/teams/teams.service';
 import { UpdateUserTokenDto } from './dto/update-user-token.dto';
 import { MobileTokenResponse } from './types/mobile-token-response.type';
+import { PaginateQuery, Paginated, paginate } from 'nestjs-paginate';
+import { USERS_PAGINATION_CONFIG } from './users.constants';
+import { SearchUserResponseDto } from './dto/search-user-response.dto';
+import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
+import { FriendRequestListItemDto } from './dto/friend-request-list-item.dto';
 
 @Injectable()
 export class UsersService {
@@ -25,11 +31,22 @@ export class UsersService {
     return this.usersRepository.save(createUserDto);
   }
 
-  findAll() {
-    return this.usersRepository.find({ relations: ['team'] });
+  findAll(query: PaginateQuery): Promise<Paginated<User>> {
+    return paginate(query, this.usersRepository, USERS_PAGINATION_CONFIG);
   }
 
-  async search(email?: string, lastName?: string, teamId?: number) {
+  async search(
+    email?: string,
+    lastName?: string,
+    teamName?: string,
+    excludeWithFriendRequest?: boolean,
+    currentUser?: User
+  ): Promise<SearchUserResponseDto[]> {
+    // Return empty array if no search params provided
+    if (!email && !lastName && teamName === undefined) {
+      return [];
+    }
+
     const queryBuilder = this.usersRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.team', 'team');
@@ -42,14 +59,44 @@ export class UsersService {
       queryBuilder.andWhere('user.lastName LIKE :lastName', { lastName: `%${lastName}%` });
     }
 
-    if (teamId !== undefined) {
-      queryBuilder.andWhere('team.id = :teamId', { teamId });
+    if (teamName !== undefined) {
+      queryBuilder.andWhere('team.name = :teamName', { teamName });
     }
 
-    return queryBuilder.getMany();
+    // Exclude users with any friend request status if requested
+    if (excludeWithFriendRequest && currentUser) {
+      const friendRequests = await this.friendRequestsRepository.find({
+        where: [
+          { requester: { id: currentUser.id } },
+          { recipient: { id: currentUser.id } },
+        ],
+        relations: ['requester', 'recipient'],
+      });
+
+      const excludedUserIds = friendRequests.map((fr) =>
+        fr.requester.id === currentUser.id ? fr.recipient.id : fr.requester.id
+      );
+
+      if (excludedUserIds.length > 0) {
+        queryBuilder.andWhere('user.id NOT IN (:...excludedUserIds)', {
+          excludedUserIds,
+        });
+      }
+    }
+
+    const take = 5;
+
+    const users = await queryBuilder.take(take).getMany();
+    return users.map((user) => ({
+      ...toSimpleUser(user),
+      email: user.email,
+      team: user.team
+        ? { id: user.team.id, name: user.team.name }
+        : null,
+    }));
   }
 
-  findOne(id: number) {
+  findOne(id: string) {
     return this.usersRepository.findOne({
       where: { 
         id,
@@ -58,7 +105,7 @@ export class UsersService {
     });
   }
 
-  findFriendRequest(id: number) {
+  findFriendRequest(id: string) {
     return this.friendRequestsRepository.findOne({
       where: { id },
       relations: ['requester', 'recipient'],
@@ -69,7 +116,7 @@ export class UsersService {
     return this.usersRepository.findOneBy({ email });
   }
 
-  findByIds(ids: Array<number>, team?: number) {
+  findByIds(ids: Array<string>, team?: string) {
     return this.usersRepository.find({
       relations: ['team'],
       where: {
@@ -81,7 +128,7 @@ export class UsersService {
     });
   }
 
-  getMobileTokens(ids: Array<number>): Promise<Array<MobileTokenResponse>> {
+  getMobileTokens(ids: Array<string>): Promise<Array<MobileTokenResponse>> {
     return this.usersRepository
       .createQueryBuilder('user')
       .select(['user.id AS id', 'user.mobileToken AS token'])
@@ -89,13 +136,13 @@ export class UsersService {
       .getRawMany();
   }
 
-  uploadImage(id: number, image: string) {
+  uploadImage(id: string, image: string) {
     return this.usersRepository.update(id, {
       image,
     });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
+  async update(id: string, updateUserDto: UpdateUserDto) {
     const team = await this.teamsService.findOne(updateUserDto.team);
     return this.usersRepository.save({
       ...updateUserDto,
@@ -113,13 +160,13 @@ export class UsersService {
     );
   }
 
-  remove(id: number) {
-    return this.usersRepository.delete({ id });
+  remove(id: string) {
+    return this.usersRepository.softDelete({ id });
   }
 
-  async updateCurrentUserToken(id: number, params: UpdateUserTokenDto) {
+  async updateCurrentUserToken(id: string, params: UpdateUserTokenDto) {
     const userToUpdate = this.usersRepository.create({
-      id: Number(id),
+      id: id,
       mobileToken: params.token,
     });
 
@@ -181,7 +228,38 @@ export class UsersService {
     return this.friendRequestsRepository.save(friendRequest);
   }
 
-  async getFriends(user: User) {
+  /**
+   * Whether the viewer may access another user's game history
+   * (self, admin, accepted friend, or same team).
+   */
+  async canViewUserGameHistory(viewer: User, targetUserId: string): Promise<boolean> {
+    if (viewer.id === targetUserId) {
+      return true;
+    }
+
+    if (isAdminRole(viewer)) {
+      return true;
+    }
+
+    const friends = await this.getFriends(viewer);
+    if (friends.some((f) => f.id === targetUserId)) {
+      return true;
+    }
+
+    if (viewer.team?.id) {
+      const targetUser = await this.usersRepository.findOne({
+        where: { id: targetUserId },
+        relations: ['team'],
+      });
+      if (targetUser?.team?.id === viewer.team.id) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async getFriends(user: User): Promise<SimpleUserDto[]> {
     const friendRequests = await this.friendRequestsRepository.find({
       where: [
         {
@@ -196,7 +274,7 @@ export class UsersService {
       relations: ['requester', 'recipient'],
     });
 
-    const friendsById = new Map<number, User>();
+    const friendsById = new Map<string, User>();
 
     friendRequests.forEach((request) => {
       const friend =
@@ -207,10 +285,10 @@ export class UsersService {
       friendsById.set(friend.id, friend);
     });
 
-    return Array.from(friendsById.values());
+    return Array.from(friendsById.values()).map(toSimpleUser);
   }
 
-  async acceptFriendRequest(id: number, user: User) {
+  async acceptFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {
@@ -233,7 +311,7 @@ export class UsersService {
     return this.friendRequestsRepository.save(updatedFriendRequest);
   }
 
-  async rejectFriendRequest(id: number, user: User) {
+  async rejectFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {
@@ -256,27 +334,45 @@ export class UsersService {
     return this.friendRequestsRepository.save(updatedFriendRequest);
   }
 
-  async getReceivedFriendRequests(user: User) {
-    return this.friendRequestsRepository.find({
+  async getReceivedFriendRequests(user: User): Promise<FriendRequestListItemDto[]> {
+    const requests = await this.friendRequestsRepository.find({
       where: {
         recipient: { id: user.id },
         status: FriendRequestStatus.IN_PROGRESS,
       },
       relations: ['requester', 'recipient'],
     });
+    return requests.map((fr) => ({
+      id: fr.id,
+      createdAt: fr.createdAt,
+      updatedAt: fr.updatedAt,
+      message: fr.message ?? null,
+      status: fr.status,
+      requester: toSimpleUser(fr.requester),
+      recipient: toSimpleUser(fr.recipient),
+    }));
   }
 
-  async getSentFriendRequests(user: User) {
-    return this.friendRequestsRepository.find({
+  async getSentFriendRequests(user: User): Promise<FriendRequestListItemDto[]> {
+    const requests = await this.friendRequestsRepository.find({
       where: {
         requester: { id: user.id },
         status: FriendRequestStatus.IN_PROGRESS,
       },
       relations: ['requester', 'recipient'],
     });
+    return requests.map((fr) => ({
+      id: fr.id,
+      createdAt: fr.createdAt,
+      updatedAt: fr.updatedAt,
+      message: fr.message ?? null,
+      status: fr.status,
+      requester: toSimpleUser(fr.requester),
+      recipient: toSimpleUser(fr.recipient),
+    }));
   }
 
-  async deleteFriendRequest(id: number, user: User) {
+  async deleteFriendRequest(id: string, user: User) {
     const friendRequest = await this.findFriendRequest(id);
 
     if (!friendRequest) {

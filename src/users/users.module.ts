@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, forwardRef } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -15,9 +15,17 @@ import { AuthService } from 'src/auth/auth.service';
 import { UserExistsRule } from 'src/common/validators/user-exists.rule';
 import { FriendRequestExistsRule } from './validators/friend-request-exists.rule';
 import { GeolocationService } from 'src/common/services/geolocation.service';
+import { FileUploadModule } from 'src/common/modules/file-upload.module';
+import { RedisModule } from 'src/common/modules/redis.module';
+import { GamesModule } from 'src/games/games.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Team, FriendRequest])],
+  imports: [
+    TypeOrmModule.forFeature([User, Team, FriendRequest]),
+    FileUploadModule,
+    RedisModule,
+    forwardRef(() => GamesModule),
+  ],
   controllers: [UsersController],
   providers: [
     UsersService,
@@ -32,6 +40,7 @@ import { GeolocationService } from 'src/common/services/geolocation.service';
     FriendRequestExistsRule,
     GeolocationService,
   ],
+  exports: [UsersService],
 })
 export class UsersModule {
   configure(consumer: MiddlewareConsumer) {

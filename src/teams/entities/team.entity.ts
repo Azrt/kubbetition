@@ -1,4 +1,6 @@
 import { Common } from 'src/common/entities/CommonEntity';
+import { Division } from './division.entity';
+import { Post } from './post.entity';
 import { TeamRequest } from 'src/team-requests/entities/team-request.entity';
 import { User } from 'src/users/entities/user.entity';
 import {
@@ -8,6 +10,7 @@ import {
   OneToMany,
   OneToOne,
 } from 'typeorm';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 @Entity()
 export class Team extends Common {
@@ -21,18 +24,37 @@ export class Team extends Common {
   country: string;
 
   @Column({ nullable: true, length: 450 })
+  details: string;
+
+  @Column({ nullable: true, length: 450 })
   logo: string;
+
+  @OneToMany(() => Division, (division) => division.team, {
+    nullable: true,
+    cascade: true,
+  })
+  divisions: Division[];
 
   @OneToMany(() => User, (user) => user.team, {
     nullable: true,
   })
   members: Array<User>;
 
+  /** Number of members (set by loadRelationCountAndMap in list endpoints). */
+  @ApiPropertyOptional()
+  membersCount?: number;
+
   @OneToMany(() => TeamRequest, (request) => request.user, {
     nullable: true,
     cascade: true,
   })
   teamRequests: Array<TeamRequest>;
+
+  @OneToMany(() => Post, (post) => post.team, {
+    nullable: true,
+    cascade: true,
+  })
+  posts: Array<Post>;
 
   @ManyToOne(() => User, {
     nullable: false,

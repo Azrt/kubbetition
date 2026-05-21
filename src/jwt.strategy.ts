@@ -33,7 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload) {
-    const id = payload.sub as unknown as number;
+    const id = payload.sub;
     const user = await this.userService.findOne(id);
 
     if (!user) throw new UnauthorizedException('Please log in to continue');

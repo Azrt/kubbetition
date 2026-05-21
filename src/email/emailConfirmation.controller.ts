@@ -42,7 +42,7 @@ export class EmailConfirmationController {
 
       res.status(HttpStatus.OK).send({ success: true })
     } catch (e) {
-      res.status(HttpStatus.BAD_REQUEST).json(e);
+      res.status(HttpStatus.BAD_REQUEST).json({ message: 'Failed to resend verification email' });
     }
   }
 }

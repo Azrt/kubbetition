@@ -14,7 +14,7 @@ export class GameReadyRule implements ValidatorConstraintInterface {
   ) {}
 
   async validate(id: string, validationArguments: ValidationArguments) {
-    const game = await this.gamesService.findOne(+id);
+    const game = await this.gamesService.findOne(id);
 
     return game.isGameReady;
   }

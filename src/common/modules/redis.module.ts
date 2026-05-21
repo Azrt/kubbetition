@@ -13,6 +13,7 @@ import { RedisService } from "../services/redis.service";
         store: await redisStore({
           url: configService.get("REDIS_URI"),
           ttl: 10000,
+          // Use rediss:// in production for TLS; redis:// is unencrypted
         }),
       }),
     }),

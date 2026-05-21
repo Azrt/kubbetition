@@ -16,7 +16,12 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CurrentUser } from 'src/common/decorators/currentUser.decorator';
 import { User } from 'src/users/entities/user.entity';
+import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
+@ApiTags('auth')
+@ApiBearerAuth(SWAGGER_BEARER_TOKEN)
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -41,6 +46,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
   @Post("google/login")
   async googleTokenLogin(
     @Body() params: GoogleLoginDto,
@@ -49,10 +55,10 @@ export class AuthController {
   ): Promise<any> {
     try {
       const user = await this.authService.googleTokenLogin(params.token, req);
-      const tokens = this.authService.generateTokens(user);
+      const tokens = await this.authService.generateTokens(user);
 
       const data = {
-        user,
+        user: { ...user, role: user.role },
         ...tokens,
       };
 
@@ -60,13 +66,14 @@ export class AuthController {
     } catch (e) {
       res.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
-        message: e?.message ?? 'Google login failed',
+        message: 'Google login failed',
         error: 'Bad Request',
       });
     }
   }
 
   @Public()
+  @Throttle({ short: { limit: 5, ttl: 60000 } })
   @Post("refresh")
   async refreshTokens(
     @Body() params: RefreshTokenDto,
@@ -76,12 +83,19 @@ export class AuthController {
       const tokens = await this.authService.refreshTokens(params.refreshToken);
       res.status(HttpStatus.OK).json(tokens);
     } catch (e) {
-      res.status(HttpStatus.UNAUTHORIZED).json({ message: e.message });
+      res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Invalid or expired refresh token' });
     }
+  }
+
+  @Post("logout")
+  async logout(@CurrentUser() user: User) {
+    await this.authService.revokeAllUserTokens(user.id);
+    return { message: 'Logged out successfully' };
   }
 
   @Get("me")
   async currentUserData(@CurrentUser() user: User) {
-    return this.authService.getCurrentUser(user);
+    const me = await this.authService.getCurrentUser(user);
+    return { ...me, role: me.role };
   }
 }

@@ -18,6 +18,8 @@ import { RolesGuard } from './guards/roles.guard';
 import { JwtMiddleware } from './middleware/jwt.middleware';
 import { GeolocationService } from 'src/common/services/geolocation.service';
 import { GamesModule } from 'src/games/games.module';
+import { FileUploadModule } from 'src/common/modules/file-upload.module';
+import { RedisModule } from 'src/common/modules/redis.module';
 
 const globalGuards = [
   {
@@ -40,6 +42,8 @@ const globalGuards = [
     PassportModule,
     TypeOrmModule.forFeature([User, Team, FriendRequest]),
     forwardRef(() => GamesModule),
+    FileUploadModule,
+    RedisModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -56,6 +60,6 @@ const globalGuards = [
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(JwtMiddleware).forRoutes("*");
+    consumer.apply(JwtMiddleware).forRoutes("/me");
   }
 }
