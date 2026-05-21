@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -31,6 +32,9 @@ import { SimpleUserDto } from 'src/common/dto/simple-user.dto';
 import { FileUploadService, FileType } from 'src/common/services/file-upload.service';
 import { SendInvitationDto } from './dto/send-invitation.dto';
 import { EventInvitation } from './entities/event-invitation.entity';
+import { FindEventsQueryDto } from './dto/find-events-query.dto';
+import { EventListSort } from './enums/event-list-sort.enum';
+import { Paginate, PaginateQuery, Paginated } from 'nestjs-paginate';
 
 @ApiTags('events')
 @ApiBearerAuth(SWAGGER_BEARER_TOKEN)
@@ -97,25 +101,70 @@ export class EventsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all events (summary fields only: id, name, imageUrl, participantsCount, gameType, location, startTime, joiningTime). By default returns only future events and events from today.' })
+  @ApiOperation({
+    summary:
+      'Get all events (summary fields only). Optional lat/lng filter by radiusKm (default 10 km) and sort closest first. Use sort=distance with lat/lng to sort all visible events by distance without the default radius filter; add radiusKm to also limit by distance.',
+  })
   @ApiQuery({
     name: 'showArchived',
     required: false,
     type: Boolean,
     description: 'If true, includes past events. Default: false (only future events and today\'s events)',
   })
+  @ApiQuery({
+    name: 'lat',
+    required: false,
+    type: Number,
+    description: 'Latitude for nearby search (requires lng). Default radius: 10 km.',
+  })
+  @ApiQuery({
+    name: 'lng',
+    required: false,
+    type: Number,
+    description: 'Longitude for nearby search (requires lat). Default radius: 10 km.',
+  })
+  @ApiQuery({
+    name: 'radiusKm',
+    required: false,
+    type: Number,
+    description:
+      'Optional search radius in km (requires lat and lng). When omitted, no distance limit is applied. Min: 1, max: 300.',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 50)',
+  })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: EventListSort,
+    description:
+      'Sort order. distance = closest first (requires lat and lng). Events without a location appear last.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of events (summary view)',
-    type: [SimpleEventDto],
+    description: 'Paginated list of events (summary view)',
   })
   async findAll(
-    @Query('showArchived') showArchived?: string,
+    @Paginate() paginateQuery: PaginateQuery,
+    @Query() query: FindEventsQueryDto,
     @Request() req?: RequestWithUser,
-  ): Promise<SimpleEventDto[]> {
-    // Convert string to boolean (query params come as strings)
-    const includeArchived = showArchived === 'true';
-    return this.eventsService.findAllVisible(req.user, includeArchived);
+  ): Promise<Paginated<SimpleEventDto>> {
+    return this.eventsService.findAllVisible(req.user, paginateQuery, {
+      showArchived: query.showArchived ?? false,
+      lat: query.lat,
+      lng: query.lng,
+      radiusKm: query.radiusKm,
+      sort: query.sort,
+    });
   }
 
   @Get(':id/games')
@@ -128,7 +177,7 @@ export class EventsController {
   @ApiResponse({ status: 403, description: 'Forbidden - not allowed to access this event' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getGames(
-    @Param('id') eventId: string,
+    @Param('id', ParseUUIDPipe) eventId: string,
     @Request() req: RequestWithUser,
   ): Promise<Game[]> {
     return this.eventsService.getGames(eventId, req.user);
@@ -218,7 +267,7 @@ export class EventsController {
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: RequestWithUser,
   ): Promise<EventDetailDto> {
     return this.eventsService.findOneVisible(id, req.user);

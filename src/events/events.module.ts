@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
+import { EventsMeController } from './events-me.controller';
 import { Event } from './entities/event.entity';
 import { EventInvitation } from './entities/event-invitation.entity';
 import { User } from 'src/users/entities/user.entity';
@@ -22,7 +23,7 @@ import { TeamsModule } from 'src/teams/teams.module';
     FileUploadModule,
     TeamsModule,
   ],
-  controllers: [EventsController],
+  controllers: [EventsMeController, EventsController],
   providers: [EventsService, JwtService],
   exports: [EventsService],
 })

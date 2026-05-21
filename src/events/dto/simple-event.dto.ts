@@ -32,6 +32,18 @@ export class SimpleEventDto {
 
   @ApiPropertyOptional({ nullable: true, description: 'Presigned URL for the event image' })
   imageUrl: string | null;
+
+  @ApiProperty({
+    description: 'Whether the current user is registered as a participant',
+  })
+  isJoined: boolean;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description:
+      'Distance from the search point in km (present when lat/lng query params were used)',
+  })
+  distanceKm: number | null;
 }
 
 function countParticipants(participants: Event['participants']): number {
@@ -45,7 +57,9 @@ function countParticipants(participants: Event['participants']): number {
 export function toSimpleEvent(
   event: Event,
   imageUrl: string | null = null,
+  options: { isJoined?: boolean; distanceKm?: number | null } = {},
 ): SimpleEventDto {
+  const { isJoined = false, distanceKm = null } = options;
   return {
     id: event.id,
     createdAt: event.createdAt,
@@ -57,5 +71,7 @@ export function toSimpleEvent(
     startTime: event.startTime,
     joiningTime: event.joiningTime ?? null,
     imageUrl: imageUrl ?? null,
+    isJoined,
+    distanceKm,
   };
 }

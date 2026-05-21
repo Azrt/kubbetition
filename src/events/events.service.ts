@@ -24,9 +24,17 @@ import { EventDetailDto, toEventDetail } from './dto/event-detail.dto';
 import { SimpleEventDto, toSimpleEvent } from './dto/simple-event.dto';
 import { SimpleUserDto, toSimpleUser } from 'src/common/dto/simple-user.dto';
 import { DivisionsService } from 'src/teams/divisions/divisions.service';
+import { EventListSort } from './enums/event-list-sort.enum';
 import { EventMode } from './enums/event-mode.enum';
 import {
+  EVENTS_DEFAULT_PAGE_LIMIT,
+  EVENTS_MAX_PAGE_LIMIT,
+} from './events.constants';
+import { PaginateQuery, Paginated } from 'nestjs-paginate';
+import {
   computeRoundRobinRounds,
+  EVENT_DISTANCE_KM_SQL,
+  EVENT_USER_IS_PARTICIPANT_SQL,
   usesRankingMatchmaking,
 } from './events.helpers';
 
@@ -298,8 +306,9 @@ export class EventsService {
       throw new BadRequestException('Team cannot be empty');
     }
 
-    // For private events, check if user has invitation or is admin
-    if (!event.isPublic && !isAdminRole(currentUser)) {
+    // For private events, check if user has invitation, is admin, or is the creator
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    if (!event.isPublic && !isAdminRole(currentUser) && !isEventCreator) {
       const hasInvite = await this.hasInvitation(eventId, currentUser.id);
       if (!hasInvite) {
         throw new ForbiddenException('You need an invitation to join this private event');
@@ -1230,62 +1239,172 @@ export class EventsService {
 
   async findAllVisible(
     currentUser: User,
-    showArchived: boolean = false,
-  ): Promise<SimpleEventDto[]> {
-    let events: EventEntity[];
-    
-    // Get start of today (midnight) for date filtering
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Admins can see all events
-    if (isAdminRole(currentUser)) {
-      const queryBuilder = this.eventsRepository
-        .createQueryBuilder('event')
-        .leftJoinAndSelect('event.createdBy', 'createdBy')
-        .leftJoinAndSelect('event.games', 'games');
-      
-      // Filter by date unless showArchived is true
-      if (!showArchived) {
-        queryBuilder.where('event.startTime >= :today', { today });
-      }
-      
-      events = await queryBuilder.getMany();
-    } else {
-      // Use QueryBuilder for efficient database-level filtering
-      // Fetch: public events OR private events where user is creator OR has invitation
-      const queryBuilder = this.eventsRepository
-        .createQueryBuilder('event')
-        .leftJoinAndSelect('event.createdBy', 'createdBy')
-        .leftJoinAndSelect('event.games', 'games')
-        .leftJoin(
-          'event_invitation',
-          'invitation',
-          'invitation.eventId = event.id AND invitation.userId = :userId',
-          { userId: currentUser.id }
-        );
-      
-      // Build visibility conditions
-      const visibilityConditions = '(event.isPublic = :isPublic OR createdBy.id = :creatorId OR invitation.id IS NOT NULL)';
-      
-      if (!showArchived) {
-        // Filter: (visibility conditions) AND (future or today)
-        queryBuilder
-          .where(visibilityConditions, { isPublic: true, creatorId: currentUser.id })
-          .andWhere('event.startTime >= :today', { today });
-      } else {
-        // No date filter, just visibility
-        queryBuilder.where(visibilityConditions, { isPublic: true, creatorId: currentUser.id });
-      }
-      
-      events = await queryBuilder.getMany();
+    query: PaginateQuery,
+    options: {
+      showArchived?: boolean;
+      lat?: number;
+      lng?: number;
+      radiusKm?: number;
+      sort?: EventListSort;
+    } = {},
+  ): Promise<Paginated<SimpleEventDto>> {
+    const {
+      showArchived = false,
+      lat,
+      lng,
+      radiusKm,
+      sort,
+    } = options;
+
+    const hasLat = lat != null;
+    const hasLng = lng != null;
+    if (hasLat !== hasLng) {
+      throw new BadRequestException('Both lat and lng are required for nearby search');
+    }
+    if (radiusKm != null && !hasLat) {
+      throw new BadRequestException('radiusKm requires lat and lng');
+    }
+    if (sort === EventListSort.Distance && !hasLat) {
+      throw new BadRequestException('sort=distance requires lat and lng');
     }
 
-    // Add presigned URLs for all events in parallel
+    const hasGeo = hasLat && hasLng;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const queryBuilder = this.eventsRepository
+      .createQueryBuilder('event')
+      .leftJoinAndSelect('event.createdBy', 'createdBy');
+
+    const conditions: string[] = [];
+    const params: Record<string, unknown> = { today };
+
+    if (!isAdminRole(currentUser)) {
+      queryBuilder.leftJoin(
+        'event_invitation',
+        'invitation',
+        'invitation.eventId = event.id AND invitation.userId = :userId',
+        { userId: currentUser.id },
+      );
+      conditions.push(
+        '(event.isPublic = :isPublic OR createdBy.id = :creatorId OR invitation.id IS NOT NULL)',
+      );
+      params.isPublic = true;
+      params.creatorId = currentUser.id;
+    }
+
+    if (!showArchived) {
+      conditions.push('event.startTime >= :today');
+    }
+
+    if (hasGeo) {
+      params.lat = lat;
+      params.lng = lng;
+
+      const sortByDistance =
+        sort === EventListSort.Distance || (sort == null && hasGeo);
+
+      if (radiusKm != null) {
+        conditions.push('event.location IS NOT NULL');
+        conditions.push(`${EVENT_DISTANCE_KM_SQL} <= :radiusKm`);
+        params.radiusKm = radiusKm;
+      }
+
+      queryBuilder.addSelect(EVENT_DISTANCE_KM_SQL, 'distance_km');
+
+      if (sortByDistance) {
+        queryBuilder
+          .addSelect(
+            'CASE WHEN event.location IS NULL THEN 1 ELSE 0 END',
+            'location_null_sort',
+          )
+          .addOrderBy('location_null_sort', 'ASC')
+          .addOrderBy('distance_km', 'ASC', 'NULLS LAST');
+      }
+    } else {
+      queryBuilder.orderBy('event.startTime', 'ASC');
+    }
+
+    if (conditions.length > 0) {
+      queryBuilder.where(conditions.join(' AND '), params);
+    }
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(
+      Math.max(1, Number(query.limit) || EVENTS_DEFAULT_PAGE_LIMIT),
+      EVENTS_MAX_PAGE_LIMIT,
+    );
+
+    const totalItems = await queryBuilder.getCount();
+    const { entities: events, raw } = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getRawAndEntities();
+    const eventsWithImages = await this.addImageUrls(events);
+
+    const data = eventsWithImages.map((event, index) => {
+      const rawRow = raw[index] as Record<string, unknown> | undefined;
+      const distanceRaw = rawRow?.distance_km ?? rawRow?.distanceKm;
+      const distanceKm =
+        distanceRaw != null && distanceRaw !== ''
+          ? Number(distanceRaw)
+          : null;
+
+      return toSimpleEvent(event, event.imageUrl ?? null, {
+        isJoined: this.isParticipant(event, currentUser.id),
+        distanceKm: Number.isFinite(distanceKm) ? distanceKm : null,
+      });
+    });
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+
+    return {
+      data,
+      meta: {
+        itemsPerPage: limit,
+        totalItems,
+        currentPage: page,
+        totalPages,
+        sortBy: [['startTime', 'ASC']],
+        searchBy: [],
+        search: '',
+        select: [],
+      },
+      links: {
+        current: `?page=${page}&limit=${limit}`,
+      },
+    } as Paginated<SimpleEventDto>;
+  }
+
+  async findMyEvents(
+    currentUser: User,
+    showArchived: boolean = false,
+  ): Promise<SimpleEventDto[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const queryBuilder = this.eventsRepository
+      .createQueryBuilder('event')
+      .leftJoinAndSelect('event.createdBy', 'createdBy')
+      .where(
+        `(createdBy.id = :userId OR ${EVENT_USER_IS_PARTICIPANT_SQL})`,
+        { userId: currentUser.id, userIdText: currentUser.id },
+      );
+
+    if (!showArchived) {
+      queryBuilder.andWhere('event.startTime >= :today', { today });
+    }
+
+    queryBuilder.orderBy('event.startTime', showArchived ? 'DESC' : 'ASC');
+
+    const events = await queryBuilder.getMany();
     const eventsWithImages = await this.addImageUrls(events);
 
     return eventsWithImages.map((event) =>
-      toSimpleEvent(event, event.imageUrl ?? null),
+      toSimpleEvent(event, event.imageUrl ?? null, {
+        isJoined: this.isParticipant(event, currentUser.id),
+      }),
     );
   }
 
