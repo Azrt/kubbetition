@@ -277,7 +277,11 @@ export class EventsService {
     }
 
     const now = new Date();
-    const joinDeadline = event.joiningTime ?? event.startTime;
+    const isEventCreator = event.createdBy.id === currentUser.id;
+    // Creators may join until the event starts; others use joiningTime (or startTime).
+    const joinDeadline = isEventCreator
+      ? event.startTime
+      : (event.joiningTime ?? event.startTime);
     if (joinDeadline && now.getTime() > new Date(joinDeadline).getTime()) {
       throw new BadRequestException('Cannot join: joining time has passed');
     }
@@ -307,7 +311,6 @@ export class EventsService {
     }
 
     // For private events, check if user has invitation, is admin, or is the creator
-    const isEventCreator = event.createdBy.id === currentUser.id;
     if (!event.isPublic && !isAdminRole(currentUser) && !isEventCreator) {
       const hasInvite = await this.hasInvitation(eventId, currentUser.id);
       if (!hasInvite) {
