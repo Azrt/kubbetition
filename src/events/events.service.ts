@@ -29,6 +29,7 @@ import { EventMode } from './enums/event-mode.enum';
 import {
   EVENTS_DEFAULT_PAGE_LIMIT,
   EVENTS_MAX_PAGE_LIMIT,
+  MY_EVENTS_CACHE_TTL,
 } from './events.constants';
 import { PaginateQuery, Paginated } from 'nestjs-paginate';
 import {
@@ -37,6 +38,9 @@ import {
   EVENT_USER_IS_PARTICIPANT_SQL,
   usesRankingMatchmaking,
 } from './events.helpers';
+import { RedisService } from 'src/common/services/redis.service';
+
+type MyEventsCacheEntry = { events: SimpleEventDto[] };
 
 /** Event participant entry: legacy string[] or object with userIds and optional division info (for round games) */
 export type EventParticipantEntry = string[] | { userIds: string[]; divisionId?: string | null; teamId?: string | null };
@@ -65,11 +69,30 @@ export class EventsService {
     private eventInvitationsRepository: Repository<EventInvitation>,
     private fileUploadService: FileUploadService,
     private divisionsService: DivisionsService,
+    private redisService: RedisService,
   ) {}
 
   private isParticipant(event: EventEntity, userId: string): boolean {
     const teams = event.participants || [];
     return teams.some((team) => getParticipantUserIds(team).includes(userId));
+  }
+
+  private collectParticipantUserIds(event: EventEntity): string[] {
+    const ids = new Set<string>();
+    for (const entry of event.participants || []) {
+      for (const userId of getParticipantUserIds(entry)) {
+        ids.add(userId);
+      }
+    }
+    return [...ids];
+  }
+
+  private async invalidateMyEventsCacheForUsers(userIds: string[]): Promise<void> {
+    await Promise.all(
+      userIds.map((userId) =>
+        this.redisService.delByPattern(RedisService.myEventsPattern(userId)),
+      ),
+    );
   }
 
   private async hasInvitation(eventId: string, userId: string): Promise<boolean> {
@@ -412,6 +435,7 @@ export class EventsService {
       : uniqueTeamIds;
     event.participants = [...(event.participants || []), newEntry];
     const savedEvent = await this.eventsRepository.save(event);
+    await this.invalidateMyEventsCacheForUsers(uniqueTeamIds);
     const eventWithImage = await this.addImageUrl(savedEvent);
     const participantsInfo = await this.transformParticipants(savedEvent, currentUser);
     return { ...eventWithImage, participantsInfo };
@@ -459,7 +483,11 @@ export class EventsService {
       }
     }
 
-    return this.eventsRepository.save(updatedEvent);
+    const saved = await this.eventsRepository.save(updatedEvent);
+    await this.invalidateMyEventsCacheForUsers(
+      this.collectParticipantUserIds(event),
+    );
+    return saved;
   }
 
   /**
@@ -1382,8 +1410,19 @@ export class EventsService {
 
   async findMyEvents(
     currentUser: User,
-    showArchived: boolean = false,
+    options: { showArchived?: boolean; limit?: number } = {},
   ): Promise<SimpleEventDto[]> {
+    const showArchived = options.showArchived ?? false;
+    const limit = options.limit;
+
+    if (limit !== undefined) {
+      const cacheKey = RedisService.myEventsKey(currentUser.id, showArchived, limit);
+      const cached = await this.redisService.get<MyEventsCacheEntry>(cacheKey);
+      if (cached !== null && cached !== undefined) {
+        return cached.events;
+      }
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -1393,7 +1432,8 @@ export class EventsService {
       .where(
         `(createdBy.id = :userId OR ${EVENT_USER_IS_PARTICIPANT_SQL})`,
         { userId: currentUser.id, userIdText: currentUser.id },
-      );
+      )
+      .andWhere('event.deletedAt IS NULL');
 
     if (!showArchived) {
       queryBuilder.andWhere('event.startTime >= :today', { today });
@@ -1401,14 +1441,29 @@ export class EventsService {
 
     queryBuilder.orderBy('event.startTime', showArchived ? 'DESC' : 'ASC');
 
+    if (limit !== undefined) {
+      queryBuilder.limit(limit);
+    }
+
     const events = await queryBuilder.getMany();
     const eventsWithImages = await this.addImageUrls(events);
 
-    return eventsWithImages.map((event) =>
+    const result = eventsWithImages.map((event) =>
       toSimpleEvent(event, event.imageUrl ?? null, {
         isJoined: this.isParticipant(event, currentUser.id),
       }),
     );
+
+    if (limit !== undefined) {
+      const cacheKey = RedisService.myEventsKey(currentUser.id, showArchived, limit);
+      await this.redisService.set(
+        cacheKey,
+        { events: result },
+        MY_EVENTS_CACHE_TTL,
+      );
+    }
+
+    return result;
   }
 
   async endRound(eventId: string, currentUser: User): Promise<Game[]> {
@@ -1760,6 +1815,7 @@ export class EventsService {
       (entry) => !getParticipantUserIds(entry).includes(currentUser.id),
     );
     const savedEvent = await this.eventsRepository.save(event);
+    await this.invalidateMyEventsCacheForUsers([currentUser.id]);
     const eventWithImage = await this.addImageUrl(savedEvent);
     const participantsInfo = await this.transformParticipants(savedEvent, currentUser);
     return { ...eventWithImage, participantsInfo };
@@ -1876,6 +1932,9 @@ export class EventsService {
       throw new ForbiddenException('Only the event creator can delete the event');
     }
 
+    await this.invalidateMyEventsCacheForUsers(
+      this.collectParticipantUserIds(event),
+    );
     await this.eventsRepository.softDelete({ id: eventId });
   }
 }

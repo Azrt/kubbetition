@@ -1,10 +1,18 @@
-import { Controller, Get, Query, Request } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  ParseIntPipe,
+  Query,
+  Request,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EventsService } from './events.service';
 import { SimpleEventDto } from './dto/simple-event.dto';
-import { MyEventsQueryDto } from './dto/my-events-query.dto';
 import { RequestWithUser } from 'src/auth/interfaces/requestWithUser.interface';
 import { SWAGGER_BEARER_TOKEN } from 'src/app.constants';
+import { EVENTS_MAX_PAGE_LIMIT } from './events.constants';
 
 /**
  * Separate controller so GET /events/me is never captured by GET /events/:id.
@@ -26,15 +34,33 @@ export class EventsMeController {
     type: Boolean,
     description: 'If true, includes past events. Default: false (only future events and today\'s events)',
   })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description:
+      'Maximum events to return by startTime. Use limit=1 for the closest upcoming event (dashboard).',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of the current user\'s events (summary view)',
     type: [SimpleEventDto],
   })
   async findMyEvents(
-    @Query() query: MyEventsQueryDto,
     @Request() req: RequestWithUser,
+    @Query('showArchived') showArchived?: string,
+    @Query('limit', new DefaultValuePipe(undefined), new ParseIntPipe({ optional: true }))
+    limit?: number,
   ): Promise<SimpleEventDto[]> {
-    return this.eventsService.findMyEvents(req.user, query.showArchived ?? false);
+    if (limit !== undefined && (limit < 1 || limit > EVENTS_MAX_PAGE_LIMIT)) {
+      throw new BadRequestException(
+        `limit must be between 1 and ${EVENTS_MAX_PAGE_LIMIT}`,
+      );
+    }
+
+    return this.eventsService.findMyEvents(req.user, {
+      showArchived: showArchived === 'true',
+      limit,
+    });
   }
 }

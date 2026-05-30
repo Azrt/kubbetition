@@ -148,9 +148,10 @@ export class GamesService implements GamesServiceInterface {
   }
 
   /**
-   * Finds all non-ended games that started more than an hour ago,
+   * Finds all non-ended ad-hoc games that started more than an hour ago,
    * sets score 0 for teams that did not submit, and ends the games.
    * Used by the hourly cron to auto-close stale games.
+   * Event games are excluded — they must be ended manually (end round) or when the event ends.
    */
   async closeStaleUnfinishedGames(): Promise<number> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -161,6 +162,7 @@ export class GamesService implements GamesServiceInterface {
         endTime: IsNull(),
         isCancelled: false,
         startTime: LessThan(oneHourAgo),
+        event: IsNull(),
       },
     });
 

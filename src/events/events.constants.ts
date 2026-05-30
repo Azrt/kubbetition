@@ -8,3 +8,6 @@ export const NEARBY_EVENTS_MAX_RADIUS_KM = 300;
 export const EVENTS_DEFAULT_PAGE_LIMIT = 20;
 
 export const EVENTS_MAX_PAGE_LIMIT = 50;
+
+/** TTL for cached GET /events/me responses when limit is set (5 minutes). */
+export const MY_EVENTS_CACHE_TTL = 300_000;

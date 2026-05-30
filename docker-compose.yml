@@ -55,6 +55,9 @@ services:
       - .env
     ports:
       - '127.0.0.1:5050:80'
+    volumes:
+      # Persist saved servers, credentials, and pgAdmin settings across container recreate
+      - ./pgadmin/data:/var/lib/pgadmin
     depends_on:
       - db
 

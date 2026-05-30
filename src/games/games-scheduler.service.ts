@@ -9,8 +9,9 @@ export class GamesSchedulerService {
   constructor(private readonly gamesService: GamesService) {}
 
   /**
-   * Every hour: close games that started more than 1 hour ago and were not finished.
+   * Every hour: close ad-hoc games that started more than 1 hour ago and were not finished.
    * Sets score 0 for teams that did not submit, then ends the games.
+   * Event games are skipped — they are ended via end-round or when the event ends.
    */
   @Cron('0 * * * *') // At minute 0 of every hour
   async handleStaleGamesClosure() {

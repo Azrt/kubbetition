@@ -78,6 +78,14 @@ export class RedisService implements OnModuleDestroy {
     return `refresh_token:${userId}:*`;
   }
 
+  static myEventsKey(userId: string, showArchived: boolean, limit: number): string {
+    return `event:my:${userId}:${showArchived}:${limit}`;
+  }
+
+  static myEventsPattern(userId: string): string {
+    return `event:my:${userId}:*`;
+  }
+
   async storeRefreshToken(userId: string, token: string, ttlMs: number): Promise<void> {
     const hash = RedisService.hashToken(token);
     const key = RedisService.refreshTokenKey(userId, hash);
